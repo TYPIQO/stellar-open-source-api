@@ -1,0 +1,16 @@
+{
+  "Clients": {
+    "10uj18u3scez1r5s6kdgnpu86": {
+      "ClientId": "10uj18u3scez1r5s6kdgnpu86",
+      "ClientName": "UserPoolClientLocal",
+      "CreationDate": "2024-03-04T01:39:31.114Z",
+      "LastModifiedDate": "2024-03-04T01:39:31.114Z",
+      "TokenValidityUnits": {
+        "AccessToken": "hours",
+        "IdToken": "minutes",
+        "RefreshToken": "days"
+      },
+      "UserPoolId": "local_2EJhucly"
+    }
+  }
+}

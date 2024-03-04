@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "sonar-typiqo",
+        "projectKey": "typiqo-open-source-api"
+    }
+}
