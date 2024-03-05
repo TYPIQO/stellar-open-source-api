@@ -39,7 +39,6 @@ export class StellarRepository implements IStellarRepository {
   private confirmKeypair: Keypair;
   private consolidateKeypair: Keypair;
   private deliverKeypair: Keypair;
-  private receiveKeypair: Keypair;
 
   constructor(private readonly stellarConfig: StellarConfig) {
     this.server = this.stellarConfig.server;
@@ -58,9 +57,6 @@ export class StellarRepository implements IStellarRepository {
     );
     this.deliverKeypair = Keypair.fromSecret(
       process.env.STELLAR_DELIVER_SECRET_KEY,
-    );
-    this.receiveKeypair = Keypair.fromSecret(
-      process.env.STELLAR_RECEIVE_SECRET_KEY,
     );
   }
 
@@ -158,7 +154,6 @@ export class StellarRepository implements IStellarRepository {
         this.confirmKeypair,
         this.consolidateKeypair,
         this.deliverKeypair,
-        this.receiveKeypair,
       ];
 
       const issuerAccount = await this.server.loadAccount(
@@ -203,7 +198,6 @@ export class StellarRepository implements IStellarRepository {
         this.confirmKeypair,
         this.consolidateKeypair,
         this.deliverKeypair,
-        this.receiveKeypair,
       ];
 
       const assets = assetCodes.map(
@@ -234,7 +228,6 @@ export class StellarRepository implements IStellarRepository {
         this.confirmKeypair,
         this.consolidateKeypair,
         this.deliverKeypair,
-        this.receiveKeypair,
       );
 
       const feeBumpTx = this.createFeeBumpTransaction(createAssetsTx);
