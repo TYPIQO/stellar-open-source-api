@@ -30,7 +30,7 @@ import {
 @Injectable()
 export class StellarRepository implements IStellarRepository {
   private readonly TRANSACTION_TIMEOUT = 30;
-  private readonly TRANSACTION_MAX_FEE = '400';
+  private readonly TRANSACTION_MAX_FEE = '1000';
   private readonly server: Horizon.Server;
   private readonly networkPassphrase: Networks;
 
