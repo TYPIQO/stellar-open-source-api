@@ -3,9 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { StellarConfig } from '@/configuration/stellar.configuration';
 
+import { ErrorMapper } from './application/mapper/error.mapper';
 import { PRODUCT_ASSET_REPOSITORY } from './application/repository/product-asset.repository.interface';
 import { STELLAR_TRANSACTION_REPOSITORY } from './application/repository/stellar-transaction.repository.interface';
 import { STELLAR_REPOSITORY } from './application/repository/stellar.repository.interface';
+import { StellarService } from './application/services/stellar.service';
 import { ProductAssetSchema } from './infrastructure/persistence/product-asset.schema';
 import { ProductAssetTypeormRepository } from './infrastructure/persistence/product-asset.typeorm.repository';
 import { StellarTransactionSchema } from './infrastructure/persistence/stellar-transaction.schema';
@@ -18,6 +20,8 @@ import { StellarRepository } from './infrastructure/stellar.repository';
   ],
   providers: [
     StellarConfig,
+    StellarService,
+    ErrorMapper,
     {
       provide: STELLAR_REPOSITORY,
       useClass: StellarRepository,

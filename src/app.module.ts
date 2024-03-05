@@ -9,6 +9,8 @@ import { datasourceOptions } from '@configuration/orm.configuration';
 
 import { CommonModule } from '@common/common.module';
 
+import { StellarModule } from './modules/stellar/stellar.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,6 +28,7 @@ import { CommonModule } from '@common/common.module';
       },
     }),
     CommonModule,
+    StellarModule,
   ],
   controllers: [],
   providers: [],

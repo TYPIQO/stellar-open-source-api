@@ -1,0 +1,6 @@
+entity: ProductAsset
+items:
+  productAsset0:
+    productId: 10
+    assetCode: 'ODOO00000010'
+    assetIssuer: <process.env.STELLAR_ISSUER_PUBLIC_KEY>
