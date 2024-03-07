@@ -18,13 +18,13 @@ import { StellarConfig } from '@/configuration/stellar.configuration';
 import {
   ERROR_CODES,
   StellarError,
-} from '../application/exceptions/stellar.error';
+} from '../../application/exceptions/stellar.error';
 import {
   IAssetAmounts,
   IStellarAsset,
   IStellarRepository,
   ISubmittedTransaction,
-} from '../application/repository/stellar.repository.interface';
+} from '../../application/repository/stellar.repository.interface';
 
 @Injectable()
 export class StellarRepository implements IStellarRepository {

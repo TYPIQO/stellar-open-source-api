@@ -6,12 +6,12 @@ import { Horizon, Networks } from 'stellar-sdk';
 import { loadFixtures } from '@data/util/loader';
 
 import { AppModule } from '@/app.module';
-import { StellarConfig } from '@/configuration/stellar.configuration';
-
 import {
   IStellarRepository,
   STELLAR_REPOSITORY,
-} from '../../repository/stellar.repository.interface';
+} from '@/common/application/repository/stellar.repository.interface';
+import { StellarConfig } from '@/configuration/stellar.configuration';
+
 import { StellarService } from '../stellar.service';
 
 const mockPublicKey =

@@ -1,39 +1,37 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 
 import {
-  StellarTransaction,
-  TRANSACTION_TYPE,
-} from '../../domain/stellar-transaction.domain';
-import { OrderLineDto } from '../dto/order-line.dto';
-import { ERROR_CODES, StellarError } from '../exceptions/stellar.error';
-import { ErrorMapper } from '../mapper/error.mapper';
-import {
-  IProductAssetRepository,
-  PRODUCT_ASSET_REPOSITORY,
-} from '../repository/product-asset.repository.interface';
-import {
-  IStellarTransactionRepository,
-  STELLAR_TRANSACTION_REPOSITORY,
-} from '../repository/stellar-transaction.repository.interface';
+  ERROR_CODES,
+  StellarError,
+} from '@/common/application/exceptions/stellar.error';
 import {
   IAssetAmounts,
   IStellarRepository,
   ISubmittedTransaction,
   STELLAR_REPOSITORY,
-} from '../repository/stellar.repository.interface';
-import { StellarAssetService } from './stellar-asset.service';
+} from '@/common/application/repository/stellar.repository.interface';
+import { ProductAssetService } from '@/modules/product-asset/application/services/product-asset.service';
+
+import {
+  StellarTransaction,
+  TRANSACTION_TYPE,
+} from '../../domain/stellar-transaction.domain';
+import { OrderLineDto } from '../dto/order-line.dto';
+import { ErrorMapper } from '../mapper/error.mapper';
+import {
+  IStellarTransactionRepository,
+  STELLAR_TRANSACTION_REPOSITORY,
+} from '../repository/stellar-transaction.repository.interface';
 
 @Injectable()
 export class StellarService implements OnModuleInit {
   constructor(
     private readonly errorMapper: ErrorMapper,
-    @Inject(PRODUCT_ASSET_REPOSITORY)
-    private readonly productAssetRepository: IProductAssetRepository,
     @Inject(STELLAR_REPOSITORY)
     private readonly stellarRepository: IStellarRepository,
     @Inject(STELLAR_TRANSACTION_REPOSITORY)
     private readonly stellarTransactionRepository: IStellarTransactionRepository,
-    private readonly stellarAssetService: StellarAssetService,
+    private readonly stellarAssetService: ProductAssetService,
   ) {}
 
   async onModuleInit() {

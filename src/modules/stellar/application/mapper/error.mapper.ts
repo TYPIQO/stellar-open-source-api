@@ -8,7 +8,7 @@ import {
   ERROR_CODES,
   ERROR_MESSAGES,
   StellarError,
-} from '../exceptions/stellar.error';
+} from '@/common/application/exceptions/stellar.error';
 
 @Injectable()
 export class ErrorMapper {
