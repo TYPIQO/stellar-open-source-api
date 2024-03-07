@@ -21,6 +21,7 @@ import {
   ISubmittedTransaction,
   STELLAR_REPOSITORY,
 } from '../repository/stellar.repository.interface';
+import { StellarAssetService } from './stellar-asset.service';
 
 @Injectable()
 export class StellarService implements OnModuleInit {
@@ -32,82 +33,13 @@ export class StellarService implements OnModuleInit {
     private readonly stellarRepository: IStellarRepository,
     @Inject(STELLAR_TRANSACTION_REPOSITORY)
     private readonly stellarTransactionRepository: IStellarTransactionRepository,
+    private readonly stellarAssetService: StellarAssetService,
   ) {}
 
   async onModuleInit() {
     await this.stellarRepository.configureIssuerAccount();
     await this.stellarRepository.createCoreAccounts();
-  }
-
-  private createAssetCode(productId: number): string {
-    const PREFIX = 'ODOO';
-    const FILL_CHAR = '0';
-    const MAX_ASSET_CODE_LENGTH = 12;
-
-    const productCode = String(productId).padStart(
-      MAX_ASSET_CODE_LENGTH - PREFIX.length,
-      FILL_CHAR,
-    );
-
-    return PREFIX + productCode;
-  }
-
-  private transformQuantity(quantity: number): string {
-    const MAX_DECIMALS = 3;
-    return parseFloat(String(quantity)).toFixed(MAX_DECIMALS).replace('.', '');
-  }
-
-  private async transformOrderLinesToAssetAmounts(
-    orderLines: OrderLineDto[],
-  ): Promise<IAssetAmounts[]> {
-    const products: IAssetAmounts[] = [];
-    const assetsToCreate: (IAssetAmounts & { productId: number })[] = [];
-    const productAssets = await this.productAssetRepository.getMany(
-      orderLines.map((orderLine) => orderLine.productId),
-    );
-
-    for (const orderLine of orderLines) {
-      const productAsset = productAssets.find(
-        (productAsset) => productAsset.productId === orderLine.productId,
-      );
-
-      if (!productAsset) {
-        assetsToCreate.push({
-          productId: orderLine.productId,
-          quantity: this.transformQuantity(orderLine.quantity),
-          assetCode: this.createAssetCode(orderLine.productId),
-        });
-      } else {
-        products.push({
-          assetCode: productAsset.assetCode,
-          quantity: this.transformQuantity(orderLine.quantity),
-        });
-      }
-    }
-
-    if (assetsToCreate.length > 0) {
-      const assets = await this.stellarRepository.createAssets(
-        assetsToCreate.map((asset) => asset.assetCode),
-      );
-      const issuer = assets[0].issuer;
-
-      await this.productAssetRepository.createMany(
-        assetsToCreate.map((assetToCreate) => ({
-          productId: assetToCreate.productId,
-          assetCode: assetToCreate.assetCode,
-          assetIssuer: issuer,
-        })),
-      );
-
-      for (const asset of assetsToCreate) {
-        products.push({
-          assetCode: asset.assetCode,
-          quantity: asset.quantity,
-        });
-      }
-    }
-
-    return products;
+    await this.stellarAssetService.createAssetsForAllProducts();
   }
 
   private validateStellarTransaction(
@@ -168,7 +100,10 @@ export class StellarService implements OnModuleInit {
 
     this.validateStellarTransaction(type, transactions);
 
-    const products = await this.transformOrderLinesToAssetAmounts(orderLines);
+    const products =
+      await this.stellarAssetService.transformOrderLinesToAssetAmounts(
+        orderLines,
+      );
 
     const { hash, created_at } = await this.executeStellarTransaction(
       products,
