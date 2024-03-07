@@ -9,6 +9,7 @@ import { datasourceOptions } from '@configuration/orm.configuration';
 
 import { CommonModule } from '@common/common.module';
 
+import { OdooModule } from './modules/odoo/odoo.module';
 import { StellarModule } from './modules/stellar/stellar.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { StellarModule } from './modules/stellar/stellar.module';
       },
     }),
     CommonModule,
+    OdooModule,
     StellarModule,
   ],
   controllers: [],
