@@ -7,7 +7,6 @@ import {
   FeeBumpTransaction,
   Horizon,
   Keypair,
-  Memo,
   Networks,
   Operation,
   Transaction,
@@ -21,8 +20,8 @@ import {
   StellarError,
 } from '../application/exceptions/stellar.error';
 import {
+  IAssetAmounts,
   IStellarAsset,
-  IStellarProduct,
   IStellarRepository,
   ISubmittedTransaction,
 } from '../application/repository/stellar.repository.interface';
@@ -241,136 +240,114 @@ export class StellarRepository implements IStellarRepository {
     }
   }
 
-  async confirmOrder(
-    orderId: number,
-    products: IStellarProduct[],
-  ): Promise<ISubmittedTransaction> {
-    try {
-      const issuerAccount = await this.server.loadAccount(
-        this.issuerKeypair.publicKey(),
-      );
+  private async createPayments({
+    builder,
+    amounts,
+    source,
+    destination,
+  }: {
+    builder?: TransactionBuilder;
+    amounts: IAssetAmounts[];
+    source: Keypair;
+    destination: Keypair;
+  }): Promise<TransactionBuilder> {
+    const sourcePublicKey = source.publicKey();
+    const destinationPublicKey = destination.publicKey();
 
-      const builder = new TransactionBuilder(issuerAccount, {
+    if (!builder) {
+      const sourceAccount = await this.server.loadAccount(sourcePublicKey);
+
+      builder = new TransactionBuilder(sourceAccount, {
         fee: this.TRANSACTION_MAX_FEE,
         networkPassphrase: this.networkPassphrase,
       });
+    }
 
-      products.forEach(({ assetCode, quantity }) => {
-        const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
-        builder
-          .addOperation(
-            Operation.payment({
-              amount: quantity,
-              asset,
-              source: this.issuerKeypair.publicKey(),
-              destination: this.distributorKeypair.publicKey(),
-            }),
-          )
-          .addOperation(
-            Operation.payment({
-              amount: quantity,
-              asset,
-              source: this.distributorKeypair.publicKey(),
-              destination: this.confirmKeypair.publicKey(),
-            }),
-          );
+    amounts.forEach(({ assetCode, quantity }) => {
+      const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
+      builder.addOperation(
+        Operation.payment({
+          amount: quantity,
+          asset,
+          source: sourcePublicKey,
+          destination: destinationPublicKey,
+        }),
+      );
+    });
+
+    return builder;
+  }
+
+  private async submitFeeBumpTransaction(
+    transaction: Transaction,
+  ): Promise<ISubmittedTransaction> {
+    const feeBumpTx = this.createFeeBumpTransaction(transaction);
+    return (await this.server.submitTransaction(
+      feeBumpTx,
+    )) as unknown as ISubmittedTransaction;
+  }
+
+  async confirmOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction> {
+    try {
+      const builder = await this.createPayments({
+        amounts,
+        source: this.issuerKeypair,
+        destination: this.distributorKeypair,
       });
 
-      builder.addMemo(Memo.id(String(orderId)));
+      await this.createPayments({
+        builder,
+        amounts,
+        source: this.distributorKeypair,
+        destination: this.confirmKeypair,
+      });
 
       const confirmOrderTx = builder
         .setTimeout(this.TRANSACTION_TIMEOUT)
         .build();
-      confirmOrderTx.sign(this.issuerKeypair, this.distributorKeypair);
 
-      const feeBumpTx = this.createFeeBumpTransaction(confirmOrderTx);
-      return (await this.server.submitTransaction(
-        feeBumpTx,
-      )) as unknown as ISubmittedTransaction;
+      confirmOrderTx.sign(this.issuerKeypair, this.distributorKeypair);
+      return await this.submitFeeBumpTransaction(confirmOrderTx);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIRM_ORDER_ERROR);
     }
   }
 
   async consolidateOrder(
-    orderId: number,
-    products: IStellarProduct[],
+    amounts: IAssetAmounts[],
   ): Promise<ISubmittedTransaction> {
     try {
-      const confirmAccount = await this.server.loadAccount(
-        this.confirmKeypair.publicKey(),
-      );
-
-      const builder = new TransactionBuilder(confirmAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
+      const builder = await this.createPayments({
+        amounts,
+        source: this.confirmKeypair,
+        destination: this.consolidateKeypair,
       });
-
-      products.map(({ assetCode, quantity }) => {
-        const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
-        builder.addOperation(
-          Operation.payment({
-            amount: quantity,
-            asset,
-            source: this.confirmKeypair.publicKey(),
-            destination: this.consolidateKeypair.publicKey(),
-          }),
-        );
-      });
-
-      builder.addMemo(Memo.id(String(orderId)));
 
       const consolidateOrderTx = builder
         .setTimeout(this.TRANSACTION_TIMEOUT)
         .build();
-      consolidateOrderTx.sign(this.confirmKeypair);
 
-      const feeBumpTx = this.createFeeBumpTransaction(consolidateOrderTx);
-      return (await this.server.submitTransaction(
-        feeBumpTx,
-      )) as unknown as ISubmittedTransaction;
+      consolidateOrderTx.sign(this.confirmKeypair);
+      return await this.submitFeeBumpTransaction(consolidateOrderTx);
     } catch {
       throw new StellarError(ERROR_CODES.CONSOLIDATE_ORDER_ERROR);
     }
   }
 
-  async deliverOrder(
-    orderId: number,
-    products: IStellarProduct[],
-  ): Promise<ISubmittedTransaction> {
+  async deliverOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction> {
     try {
-      const consolidateAccount = await this.server.loadAccount(
-        this.consolidateKeypair.publicKey(),
-      );
-
-      const builder = new TransactionBuilder(consolidateAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
+      const builder = await this.createPayments({
+        amounts,
+        source: this.consolidateKeypair,
+        destination: this.deliverKeypair,
       });
-
-      products.map(({ assetCode, quantity }) => {
-        const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
-        builder.addOperation(
-          Operation.payment({
-            amount: quantity,
-            asset,
-            source: this.consolidateKeypair.publicKey(),
-            destination: this.deliverKeypair.publicKey(),
-          }),
-        );
-      });
-
-      builder.addMemo(Memo.id(String(orderId)));
 
       const deliverOrderTx = builder
         .setTimeout(this.TRANSACTION_TIMEOUT)
         .build();
-      deliverOrderTx.sign(this.consolidateKeypair);
 
-      const feeBumpTx = this.createFeeBumpTransaction(deliverOrderTx);
-      return (await this.server.submitTransaction(
-        feeBumpTx,
-      )) as unknown as ISubmittedTransaction;
+      deliverOrderTx.sign(this.consolidateKeypair);
+      return await this.submitFeeBumpTransaction(deliverOrderTx);
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
     }

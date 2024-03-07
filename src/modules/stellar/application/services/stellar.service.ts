@@ -16,7 +16,7 @@ import {
   STELLAR_TRANSACTION_REPOSITORY,
 } from '../repository/stellar-transaction.repository.interface';
 import {
-  IStellarProduct,
+  IAssetAmounts,
   IStellarRepository,
   ISubmittedTransaction,
   STELLAR_REPOSITORY,
@@ -57,11 +57,11 @@ export class StellarService implements OnModuleInit {
     return parseFloat(String(quantity)).toFixed(MAX_DECIMALS).replace('.', '');
   }
 
-  private async transformOrderLinesToStellarProducts(
+  private async transformOrderLinesToAssetAmounts(
     orderLines: OrderLineDto[],
-  ): Promise<IStellarProduct[]> {
-    const products: IStellarProduct[] = [];
-    const assetsToCreate: (IStellarProduct & { productId: number })[] = [];
+  ): Promise<IAssetAmounts[]> {
+    const products: IAssetAmounts[] = [];
+    const assetsToCreate: (IAssetAmounts & { productId: number })[] = [];
     const productAssets = await this.productAssetRepository.getMany(
       orderLines.map((orderLine) => orderLine.productId),
     );
@@ -146,8 +146,7 @@ export class StellarService implements OnModuleInit {
   }
 
   private async executeStellarTransaction(
-    orderId: number,
-    products: IStellarProduct[],
+    products: IAssetAmounts[],
     type: TRANSACTION_TYPE,
   ): Promise<ISubmittedTransaction> {
     const operationMap = {
@@ -156,7 +155,7 @@ export class StellarService implements OnModuleInit {
       [TRANSACTION_TYPE.DELIVER]: this.stellarRepository.deliverOrder,
     };
 
-    return await operationMap[type](orderId, products);
+    return await operationMap[type](products);
   }
 
   private async createStellarTransaction(
@@ -169,12 +168,9 @@ export class StellarService implements OnModuleInit {
 
     this.validateStellarTransaction(type, transactions);
 
-    const products = await this.transformOrderLinesToStellarProducts(
-      orderLines,
-    );
+    const products = await this.transformOrderLinesToAssetAmounts(orderLines);
 
     const { hash, created_at } = await this.executeStellarTransaction(
-      orderId,
       products,
       type,
     );

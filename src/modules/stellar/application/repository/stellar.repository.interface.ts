@@ -5,7 +5,7 @@ export interface IStellarAsset {
   issuer: string;
 }
 
-export interface IStellarProduct {
+export interface IAssetAmounts {
   assetCode: string;
   quantity: string;
 }
@@ -19,16 +19,7 @@ export interface IStellarRepository {
   createCoreAccounts(): Promise<void>;
   configureIssuerAccount(): Promise<void>;
   createAssets(assetCodes: string[]): Promise<IStellarAsset[]>;
-  confirmOrder(
-    orderId: number,
-    products: IStellarProduct[],
-  ): Promise<ISubmittedTransaction>;
-  consolidateOrder(
-    orderId: number,
-    products: IStellarProduct[],
-  ): Promise<ISubmittedTransaction>;
-  deliverOrder(
-    orderId: number,
-    products: IStellarProduct[],
-  ): Promise<ISubmittedTransaction>;
+  confirmOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction>;
+  consolidateOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction>;
+  deliverOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction>;
 }
