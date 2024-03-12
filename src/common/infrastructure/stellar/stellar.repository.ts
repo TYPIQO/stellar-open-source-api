@@ -12,6 +12,7 @@ import {
   Transaction,
   TransactionBuilder,
 } from 'stellar-sdk';
+import { HorizonApi } from 'stellar-sdk/lib/horizon';
 
 import { StellarConfig } from '@/configuration/stellar.configuration';
 
@@ -20,8 +21,7 @@ import {
   StellarError,
 } from '../../application/exceptions/stellar.error';
 import {
-  IAssetAmounts,
-  IStellarAsset,
+  IAssetAmount,
   IStellarRepository,
   ISubmittedTransaction,
 } from '../../application/repository/stellar.repository.interface';
@@ -37,7 +37,6 @@ export class StellarRepository implements IStellarRepository {
   private distributorKeypair: Keypair;
   private confirmKeypair: Keypair;
   private consolidateKeypair: Keypair;
-  private deliverKeypair: Keypair;
 
   constructor(private readonly stellarConfig: StellarConfig) {
     this.server = this.stellarConfig.server;
@@ -53,9 +52,6 @@ export class StellarRepository implements IStellarRepository {
     );
     this.consolidateKeypair = Keypair.fromSecret(
       process.env.STELLAR_CONSOLIDATE_SECRET_KEY,
-    );
-    this.deliverKeypair = Keypair.fromSecret(
-      process.env.STELLAR_DELIVER_SECRET_KEY,
     );
   }
 
@@ -116,8 +112,104 @@ export class StellarRepository implements IStellarRepository {
             authorized: true,
           },
           trustor: trustor.publicKey(),
+          source: this.issuerKeypair.publicKey(),
         }),
       );
+  }
+
+  private addPaymentOperations(
+    builder: TransactionBuilder,
+    amounts: IAssetAmount[],
+    source: Keypair,
+    destination: Keypair,
+  ): void {
+    const sourcePublicKey = source.publicKey();
+    const destinationPublicKey = destination.publicKey();
+
+    const addTrustorOperations =
+      destination.publicKey() !== this.issuerKeypair.publicKey();
+
+    amounts.forEach(({ assetCode, quantity }) => {
+      const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
+
+      if (addTrustorOperations) {
+        this.addTrustorOperation(builder, asset, destination);
+      }
+
+      builder.addOperation(
+        Operation.payment({
+          amount: quantity,
+          asset,
+          source: sourcePublicKey,
+          destination: destinationPublicKey,
+        }),
+      );
+    });
+  }
+
+  private addClearBalanceOperations(
+    builder: TransactionBuilder,
+    sourceAccount: Horizon.AccountResponse,
+    amounts: IAssetAmount[],
+  ): void {
+    const balancesToClear: HorizonApi.BalanceLineAsset<'credit_alphanum12'>[] =
+      [];
+
+    for (const { assetCode, quantity } of amounts) {
+      const balance = sourceAccount.balances.find(
+        (balance) =>
+          balance.asset_type === 'credit_alphanum12' &&
+          balance.asset_code === assetCode,
+      );
+
+      if (balance && balance.asset_type === 'credit_alphanum12') {
+        if (parseFloat(balance.balance) === parseFloat(quantity)) {
+          balancesToClear.push(balance);
+        }
+      }
+    }
+
+    for (const balance of balancesToClear) {
+      builder.addOperation(
+        Operation.changeTrust({
+          asset: new Asset(balance.asset_code, balance.asset_issuer),
+          limit: '0',
+          source: sourceAccount.account_id,
+        }),
+      );
+    }
+  }
+
+  private async submitFeeBumpTransaction(
+    transaction: Transaction,
+  ): Promise<ISubmittedTransaction> {
+    const feeBumpTx = this.createFeeBumpTransaction(transaction);
+    return (await this.server.submitTransaction(
+      feeBumpTx,
+    )) as unknown as ISubmittedTransaction;
+  }
+
+  private async createPayments(
+    amounts: IAssetAmount[],
+    source: Keypair,
+    destination: Keypair,
+  ): Promise<TransactionBuilder> {
+    const sourceAccount = await this.server.loadAccount(source.publicKey());
+
+    const builder = new TransactionBuilder(sourceAccount, {
+      fee: this.TRANSACTION_MAX_FEE,
+      networkPassphrase: this.networkPassphrase,
+    });
+
+    this.addPaymentOperations(builder, amounts, source, destination);
+
+    const clearBalances = source.publicKey() !== this.issuerKeypair.publicKey();
+
+    if (clearBalances) {
+      this.addClearBalanceOperations(builder, sourceAccount, amounts);
+    }
+
+    return builder;
   }
 
   async configureIssuerAccount(): Promise<void> {
@@ -135,219 +227,75 @@ export class StellarRepository implements IStellarRepository {
         return;
       }
 
-      const setAccountFlagsTx =
-        this.createSetAccountFlagsTransaction(issuerAccount);
-      setAccountFlagsTx.sign(this.issuerKeypair);
-
-      await this.server.submitTransaction(setAccountFlagsTx);
+      const setFlagsTx = this.createSetAccountFlagsTransaction(issuerAccount);
+      setFlagsTx.sign(this.issuerKeypair);
+      await this.server.submitTransaction(setFlagsTx);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIG_ISSUER_ACCOUNT_ERROR);
     }
   }
 
-  async createCoreAccounts(): Promise<void> {
+  async createOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const STARTING_BALANCE = '10';
-      const keypairs = [
-        this.distributorKeypair,
-        this.confirmKeypair,
-        this.consolidateKeypair,
-        this.deliverKeypair,
-      ];
-
-      const issuerAccount = await this.server.loadAccount(
-        this.issuerKeypair.publicKey(),
-      );
-
-      const builder = new TransactionBuilder(issuerAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
-      });
-
-      for (const keypair of keypairs) {
-        try {
-          await this.server.loadAccount(keypair.publicKey());
-        } catch {
-          builder.addOperation(
-            Operation.createAccount({
-              destination: keypair.publicKey(),
-              startingBalance: STARTING_BALANCE,
-            }),
-          );
-        }
-      }
-
-      const createCoreAccountsTx = builder
-        .setTimeout(this.TRANSACTION_TIMEOUT)
-        .build();
-
-      if (createCoreAccountsTx.operations.length) {
-        createCoreAccountsTx.sign(this.issuerKeypair);
-        await this.server.submitTransaction(createCoreAccountsTx);
-      }
-    } catch {
-      throw new StellarError(ERROR_CODES.CREATE_CORE_ACCOUNTS_ERROR);
-    }
-  }
-
-  async createAssets(assetCodes: string[]): Promise<IStellarAsset[]> {
-    try {
-      const trustors = [
-        this.distributorKeypair,
-        this.confirmKeypair,
-        this.consolidateKeypair,
-        this.deliverKeypair,
-      ];
-
-      const assets = assetCodes.map(
-        (assetCode) => new Asset(assetCode, this.issuerKeypair.publicKey()),
-      );
-
-      const issuerAccount = await this.server.loadAccount(
-        this.issuerKeypair.publicKey(),
-      );
-
-      const builder = new TransactionBuilder(issuerAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
-      });
-
-      for (const asset of assets) {
-        for (const trustor of trustors) {
-          this.addTrustorOperation(builder, asset, trustor);
-        }
-      }
-
-      const createAssetsTx = builder
-        .setTimeout(this.TRANSACTION_TIMEOUT)
-        .build();
-      createAssetsTx.sign(
+      const builder = await this.createPayments(
+        amounts,
         this.issuerKeypair,
         this.distributorKeypair,
-        this.confirmKeypair,
-        this.consolidateKeypair,
-        this.deliverKeypair,
       );
 
-      const feeBumpTx = this.createFeeBumpTransaction(createAssetsTx);
-      await this.server.submitTransaction(feeBumpTx);
-      return assets.map((asset) => ({
-        code: asset.code,
-        issuer: asset.issuer,
-      }));
-    } catch (error) {
-      throw new StellarError(ERROR_CODES.CREATE_ASSETS_ERROR);
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(this.issuerKeypair, this.distributorKeypair);
+      return await this.submitFeeBumpTransaction(tx);
+    } catch {
+      throw new StellarError(ERROR_CODES.CREATE_ORDER_ERROR);
     }
   }
 
-  private async createPayments({
-    builder,
-    amounts,
-    source,
-    destination,
-  }: {
-    builder?: TransactionBuilder;
-    amounts: IAssetAmounts[];
-    source: Keypair;
-    destination: Keypair;
-  }): Promise<TransactionBuilder> {
-    const sourcePublicKey = source.publicKey();
-    const destinationPublicKey = destination.publicKey();
-
-    if (!builder) {
-      const sourceAccount = await this.server.loadAccount(sourcePublicKey);
-
-      builder = new TransactionBuilder(sourceAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
-      });
-    }
-
-    amounts.forEach(({ assetCode, quantity }) => {
-      const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
-      builder.addOperation(
-        Operation.payment({
-          amount: quantity,
-          asset,
-          source: sourcePublicKey,
-          destination: destinationPublicKey,
-        }),
-      );
-    });
-
-    return builder;
-  }
-
-  private async submitFeeBumpTransaction(
-    transaction: Transaction,
-  ): Promise<ISubmittedTransaction> {
-    const feeBumpTx = this.createFeeBumpTransaction(transaction);
-    return (await this.server.submitTransaction(
-      feeBumpTx,
-    )) as unknown as ISubmittedTransaction;
-  }
-
-  async confirmOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction> {
+  async confirmOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments({
+      const builder = await this.createPayments(
         amounts,
-        source: this.issuerKeypair,
-        destination: this.distributorKeypair,
-      });
+        this.distributorKeypair,
+        this.confirmKeypair,
+      );
 
-      await this.createPayments({
-        builder,
-        amounts,
-        source: this.distributorKeypair,
-        destination: this.confirmKeypair,
-      });
-
-      const confirmOrderTx = builder
-        .setTimeout(this.TRANSACTION_TIMEOUT)
-        .build();
-
-      confirmOrderTx.sign(this.issuerKeypair, this.distributorKeypair);
-      return await this.submitFeeBumpTransaction(confirmOrderTx);
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(this.issuerKeypair, this.distributorKeypair, this.confirmKeypair);
+      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIRM_ORDER_ERROR);
     }
   }
 
   async consolidateOrder(
-    amounts: IAssetAmounts[],
+    amounts: IAssetAmount[],
   ): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments({
+      const builder = await this.createPayments(
         amounts,
-        source: this.confirmKeypair,
-        destination: this.consolidateKeypair,
-      });
+        this.confirmKeypair,
+        this.consolidateKeypair,
+      );
 
-      const consolidateOrderTx = builder
-        .setTimeout(this.TRANSACTION_TIMEOUT)
-        .build();
-
-      consolidateOrderTx.sign(this.confirmKeypair);
-      return await this.submitFeeBumpTransaction(consolidateOrderTx);
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(this.issuerKeypair, this.confirmKeypair, this.consolidateKeypair);
+      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONSOLIDATE_ORDER_ERROR);
     }
   }
 
-  async deliverOrder(amounts: IAssetAmounts[]): Promise<ISubmittedTransaction> {
+  async deliverOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments({
+      const builder = await this.createPayments(
         amounts,
-        source: this.consolidateKeypair,
-        destination: this.deliverKeypair,
-      });
+        this.consolidateKeypair,
+        this.issuerKeypair,
+      );
 
-      const deliverOrderTx = builder
-        .setTimeout(this.TRANSACTION_TIMEOUT)
-        .build();
-
-      deliverOrderTx.sign(this.consolidateKeypair);
-      return await this.submitFeeBumpTransaction(deliverOrderTx);
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(this.consolidateKeypair);
+      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
     }
