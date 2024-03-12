@@ -15,7 +15,6 @@ export const configurationValidate = Joi.object({
   STELLAR_DISTRIBUTOR_SECRET_KEY: Joi.string().required(),
   STELLAR_CONFIRM_SECRET_KEY: Joi.string().required(),
   STELLAR_CONSOLIDATE_SECRET_KEY: Joi.string().required(),
-  STELLAR_DELIVER_SECRET_KEY: Joi.string().required(),
   ODOO_URL: Joi.string().required(),
   ODOO_DATABASE: Joi.string().required(),
   ODOO_USERNAME: Joi.string().required(),
