@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CommonModule } from '@/common/common.module';
 
 import { OdooModule } from '../odoo/odoo.module';
-import { ProductAssetModule } from '../product-asset/product-asset.module';
 import { ErrorMapper } from './application/mapper/error.mapper';
 import { STELLAR_TRANSACTION_REPOSITORY } from './application/repository/stellar-transaction.repository.interface';
 import { StellarService } from './application/services/stellar.service';
@@ -15,7 +14,6 @@ import { StellarTransactionTypeormRepository } from './infrastructure/persistenc
   imports: [
     TypeOrmModule.forFeature([StellarTransactionSchema]),
     OdooModule,
-    ProductAssetModule,
     CommonModule,
   ],
   providers: [
