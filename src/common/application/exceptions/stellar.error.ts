@@ -1,13 +1,12 @@
 export enum ERROR_CODES {
   CONFIG_ISSUER_ACCOUNT_ERROR = 'CONFIG_ISSUER_ACCOUNT_ERROR',
-  CREATE_CORE_ACCOUNTS_ERROR = 'CREATE_CORE_ACCOUNTS_ERROR',
-  CREATE_ASSETS_ERROR = 'CREATE_ASSET_ERROR',
   CREATE_ORDER_ERROR = 'CREATE_ORDER_ERROR',
   CONFIRM_ORDER_ERROR = 'CONFIRM_ORDER_ERROR',
   CONSOLIDATE_ORDER_ERROR = 'CONSOLIDATE_ORDER_ERROR',
   DELIVER_ORDER_ERROR = 'DELIVER_ORDER_ERROR',
   GENERIC_ERROR = 'GENERIC_ERROR',
-  ORDER_ALREADY_CONFIRMED_ERROR = 'ORDER_ALREADY_CONFIRMED_ERROR',
+  ORDER_UNABLE_TO_CREATE_ERROR = 'ORDER_UNABLE_TO_CREATE_ERROR',
+  ORDER_UNABLE_TO_CONFIRM_ERROR = 'ORDER_UNABLE_TO_CONFIRM_ERROR',
   ORDER_UNABLE_TO_CONSOLIDATE_ERROR = 'ORDER_UNABLE_TO_CONSOLIDATE_ERROR',
   ORDER_UNABLE_TO_DELIVER_ERROR = 'ORDER_UNABLE_TO_DELIVER_ERROR',
 }
@@ -15,9 +14,6 @@ export enum ERROR_CODES {
 export const ERROR_MESSAGES: { [key in ERROR_CODES]: string } = {
   [ERROR_CODES.CONFIG_ISSUER_ACCOUNT_ERROR]:
     'An error occurred while configuring issuer account',
-  [ERROR_CODES.CREATE_CORE_ACCOUNTS_ERROR]:
-    'An error occurred while creating core accounts',
-  [ERROR_CODES.CREATE_ASSETS_ERROR]: 'An error occurred while creating assets',
   [ERROR_CODES.CREATE_ORDER_ERROR]: 'An error occurred while creating order',
   [ERROR_CODES.CONFIRM_ORDER_ERROR]:
     'An error occurred while confirming order transaction',
@@ -26,8 +22,8 @@ export const ERROR_MESSAGES: { [key in ERROR_CODES]: string } = {
   [ERROR_CODES.DELIVER_ORDER_ERROR]:
     'An error occurred while delivering order transaction',
   [ERROR_CODES.GENERIC_ERROR]: 'An error occurred in the Stellar service',
-  [ERROR_CODES.ORDER_ALREADY_CONFIRMED_ERROR]:
-    'The order has already been confirmed',
+  [ERROR_CODES.ORDER_UNABLE_TO_CREATE_ERROR]: 'The order cannot be created',
+  [ERROR_CODES.ORDER_UNABLE_TO_CONFIRM_ERROR]: 'The order cannot be confirmed',
   [ERROR_CODES.ORDER_UNABLE_TO_CONSOLIDATE_ERROR]:
     'The order cannot be consolidated',
   [ERROR_CODES.ORDER_UNABLE_TO_DELIVER_ERROR]: 'The order cannot be delivered',
