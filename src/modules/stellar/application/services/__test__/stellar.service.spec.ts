@@ -13,6 +13,7 @@ import { loadFixtures } from '@data/util/loader';
 
 import { AppModule } from '@/app.module';
 import { StellarConfig } from '@/configuration/stellar.configuration';
+import { OdooService } from '@/modules/odoo/application/services/odoo.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
 import { StellarService } from '../stellar.service';
@@ -55,6 +56,10 @@ const mockStellarConfig = {
   },
 } as StellarConfig;
 
+const mockOdooService = {
+  onModuleInit: jest.fn(),
+};
+
 const mockOrderLines = [{ productId: 10, quantity: 10 }];
 
 let mockOrderId = 0;
@@ -74,6 +79,8 @@ describe('Stellar Service', () => {
     })
       .overrideProvider(StellarConfig)
       .useValue(mockStellarConfig)
+      .overrideProvider(OdooService)
+      .useValue(mockOdooService)
       .compile();
 
     await loadFixtures(
