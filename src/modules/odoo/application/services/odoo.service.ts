@@ -2,7 +2,6 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as Odoo from 'odoo-await';
 
 import { ERROR_CODES, OdooError } from '../exceptions/odoo.error';
-import { MODEL } from './odoo.models';
 
 @Injectable()
 export class OdooService implements OnModuleInit {
@@ -26,9 +25,5 @@ export class OdooService implements OnModuleInit {
       console.log(error);
       throw new OdooError(ERROR_CODES.CONNECT_ERROR);
     }
-  }
-
-  async getAllProductIds(): Promise<number[]> {
-    return await this.odoo.search(MODEL.PRODUCT, []);
   }
 }
