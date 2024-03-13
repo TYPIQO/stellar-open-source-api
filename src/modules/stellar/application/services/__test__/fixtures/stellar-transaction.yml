@@ -1,9 +1,14 @@
 entity: StellarTransaction
 items:
-  stellarTransaction1:
+  stellarTransaction0:
     hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
     orderId: 1111
-    type: 'confirm'
+    type: 'create'
+    timestamp: '2021-01-01T00:00:00Z'
+  stellarTransaction1:
+    hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
+    orderId: 2222
+    type: 'create'
     timestamp: '2021-01-01T00:00:00Z'
   stellarTransaction2:
     hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
@@ -12,8 +17,8 @@ items:
     timestamp: '2021-01-01T00:00:00Z'
   stellarTransaction3:
     hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
-    orderId: 2222
-    type: 'consolidate'
+    orderId: 3333
+    type: 'create'
     timestamp: '2021-01-01T00:00:00Z'
   stellarTransaction4:
     hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
@@ -24,9 +29,4 @@ items:
     hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
     orderId: 3333
     type: 'consolidate'
-    timestamp: '2021-01-01T00:00:00Z'
-  stellarTransaction6:
-    hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
-    orderId: 3333
-    type: 'deliver'
     timestamp: '2021-01-01T00:00:00Z'
