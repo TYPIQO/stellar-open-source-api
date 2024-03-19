@@ -1,4 +1,5 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import Queue from 'queue';
 
 import {
   ERROR_CODES,
@@ -16,7 +17,6 @@ import {
   TRANSACTION_TYPE,
 } from '../../domain/stellar-transaction.domain';
 import { OrderLineDto } from '../dto/order-line.dto';
-import { ErrorMapper } from '../mapper/error.mapper';
 import {
   IStellarTransactionRepository,
   STELLAR_TRANSACTION_REPOSITORY,
@@ -24,13 +24,19 @@ import {
 
 @Injectable()
 export class StellarService implements OnModuleInit {
+  private queue: Queue;
+
   constructor(
-    private readonly errorMapper: ErrorMapper,
     @Inject(STELLAR_REPOSITORY)
     private readonly stellarRepository: IStellarRepository,
     @Inject(STELLAR_TRANSACTION_REPOSITORY)
     private readonly stellarTransactionRepository: IStellarTransactionRepository,
-  ) {}
+  ) {
+    this.queue = new Queue({
+      autostart: true,
+      concurrency: 1,
+    });
+  }
 
   async onModuleInit() {
     await this.stellarRepository.configureIssuerAccount();
@@ -77,7 +83,7 @@ export class StellarService implements OnModuleInit {
       [TRANSACTION_TYPE.CONFIRM]: {
         length: 1,
         error: ERROR_CODES.ORDER_UNABLE_TO_CONFIRM_ERROR,
-        prevType: undefined,
+        prevType: TRANSACTION_TYPE.CREATE,
       },
       [TRANSACTION_TYPE.CONSOLIDATE]: {
         length: 2,
@@ -109,12 +115,18 @@ export class StellarService implements OnModuleInit {
     orderLines: OrderLineDto[],
     type: TRANSACTION_TYPE,
   ): Promise<string> {
-    try {
-      const transactions =
-        await this.stellarTransactionRepository.getTransactionsForOrder(
-          orderId,
-        );
+    const transactions =
+      await this.stellarTransactionRepository.getTransactionsForOrder(orderId);
 
+    const hasFailedMovements = transactions.some(
+      (transaction) => transaction.hash === '',
+    );
+
+    if (hasFailedMovements) {
+      return;
+    }
+
+    try {
       this.validateTransaction(type, transactions);
 
       const amounts = this.transformOrderLinesToAssetAmounts(orderLines);
@@ -144,7 +156,21 @@ export class StellarService implements OnModuleInit {
 
       return transaction.hash;
     } catch (error) {
-      this.errorMapper.map(error);
+      console.log(error);
+      await this.stellarTransactionRepository.create({
+        orderId,
+        type,
+        hash: '',
+        timestamp: new Date().toISOString(),
+      });
     }
+  }
+
+  pushTransaction(
+    orderId: number,
+    orderLines: OrderLineDto[],
+    type: TRANSACTION_TYPE,
+  ): void {
+    this.queue.push(() => this.executeTransaction(orderId, orderLines, type));
   }
 }
