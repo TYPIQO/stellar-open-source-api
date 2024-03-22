@@ -1,9 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Horizon, Networks } from 'stellar-sdk';
 
 import { AppModule } from '@/app.module';
-import { StellarConfig } from '@/configuration/stellar.configuration';
+import { STELLAR_REPOSITORY } from '@/common/application/repository/stellar.repository.interface';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 
 import { IOrderLineResponse } from '../../responses/order-line.response.interface';
@@ -25,17 +24,6 @@ const mockStellarService = {
   onModuleInit: jest.fn(),
 };
 
-const mockStellarConfig = {
-  server: {
-    loadAccount: jest.fn(),
-    submitTransaction: jest.fn(),
-  } as unknown as Horizon.Server,
-  network: {
-    url: 'https://horizon-testnet.stellar.org',
-    passphrase: Networks.TESTNET,
-  },
-} as StellarConfig;
-
 describe('Odoo Service', () => {
   let app: INestApplication;
   let odooService: OdooService;
@@ -44,10 +32,10 @@ describe('Odoo Service', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(StellarConfig)
-      .useValue(mockStellarConfig)
       .overrideProvider(StellarService)
       .useValue(mockStellarService)
+      .overrideProvider(STELLAR_REPOSITORY)
+      .useValue({})
       .compile();
 
     app = moduleRef.createNestApplication();
