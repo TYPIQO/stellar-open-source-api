@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { join } from 'path';
 import {
@@ -15,7 +15,10 @@ import { loadFixtures } from '@data/util/loader';
 import { AppModule } from '@/app.module';
 import { StellarConfig } from '@/configuration/stellar.configuration';
 import { OdooService } from '@/modules/odoo/application/services/odoo.service';
-import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
+import {
+  StellarTransaction,
+  TRANSACTION_TYPE,
+} from '@/modules/stellar/domain/stellar-transaction.domain';
 
 import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
 import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
@@ -380,6 +383,44 @@ describe('Stellar Service', () => {
       ).toBe(true);
     });
 
+    it('Should persist a failed transaction when a stellar transaction fails', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockOrderId = getOrderId();
+
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error());
+
+      const response = await stellarService.executeTransaction(
+        TRANSACTION_TYPE.CREATE,
+        mockOrderId,
+        mockOrderLineIds,
+      );
+
+      const expectedTrace: StellarTransaction[] = [
+        {
+          id: expect.any(Number),
+          type: TRANSACTION_TYPE.CREATE,
+          orderId: mockOrderId,
+          hash: '',
+          timestamp: expect.any(String),
+          createdAt: expect.any(String),
+          updatedAt: expect.any(String),
+        },
+      ];
+
+      const trace = await stellarService.getTransactionsForOrder(mockOrderId);
+
+      expect(response).toBe(undefined);
+      expect(trace).toEqual(expectedTrace);
+    });
+
     it('Should return undefined if you want to make an invalid transaction for invalid length', async () => {
       const confirmResponse = await stellarService.executeTransaction(
         TRANSACTION_TYPE.CONFIRM,
@@ -412,6 +453,26 @@ describe('Stellar Service', () => {
   });
 
   describe('Stellar Controller', () => {
+    it('GET /stellar/trace/:orderId - Should get the trace of an order', async () => {
+      const expectedTrace = [
+        {
+          id: expect.any(Number),
+          type: TRANSACTION_TYPE.CREATE,
+          orderId: failedOrderId,
+          hash: '',
+          timestamp: expect.any(String),
+          createdAt: expect.any(String),
+          updatedAt: expect.any(String),
+        },
+      ];
+
+      const { body } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${failedOrderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(body).toEqual(expectedTrace);
+    });
+
     it('POST /stellar/create - Should create an order', async () => {
       const body = new CreateOrderDto();
       body.id = getOrderId();
@@ -425,7 +486,7 @@ describe('Stellar Service', () => {
       await request(app.getHttpServer())
         .post('/stellar/create')
         .send(body)
-        .expect(201);
+        .expect(HttpStatus.CREATED);
 
       expect(spyPush).toBeCalledTimes(1);
       expect(spyPush).toBeCalledWith(
@@ -448,7 +509,7 @@ describe('Stellar Service', () => {
       await request(app.getHttpServer())
         .post('/stellar/confirm')
         .send(body)
-        .expect(201);
+        .expect(HttpStatus.CREATED);
 
       expect(spyPush).toBeCalledTimes(1);
       expect(spyPush).toBeCalledWith(
@@ -470,7 +531,7 @@ describe('Stellar Service', () => {
       await request(app.getHttpServer())
         .post('/stellar/consolidate')
         .send(body)
-        .expect(201);
+        .expect(HttpStatus.CREATED);
 
       expect(spyPush).toBeCalledTimes(1);
       expect(spyPush).toBeCalledWith(
@@ -491,7 +552,7 @@ describe('Stellar Service', () => {
       await request(app.getHttpServer())
         .post('/stellar/deliver')
         .send(body)
-        .expect(201);
+        .expect(HttpStatus.CREATED);
 
       expect(spyPush).toBeCalledTimes(1);
       expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);

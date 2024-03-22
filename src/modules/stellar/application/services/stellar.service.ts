@@ -179,4 +179,12 @@ export class StellarService implements OnModuleInit {
   ): void {
     this.queue.push(() => this.executeTransaction(type, orderId, orderLines));
   }
+
+  async getTransactionsForOrder(
+    orderId: number,
+  ): Promise<StellarTransaction[]> {
+    return await this.stellarTransactionRepository.getTransactionsForOrder(
+      orderId,
+    );
+  }
 }
