@@ -30,3 +30,8 @@ items:
     orderId: 3333
     type: 'consolidate'
     timestamp: '2021-01-01T00:00:00Z'
+  stellarTransaction6:
+    hash: ''
+    orderId: 4444
+    type: 'create'
+    timestamp: '2021-01-01T00:00:00Z'
