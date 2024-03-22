@@ -9,6 +9,7 @@ import { STELLAR_TRANSACTION_REPOSITORY } from './application/repository/stellar
 import { StellarService } from './application/services/stellar.service';
 import { StellarTransactionSchema } from './infrastructure/persistence/stellar-transaction.schema';
 import { StellarTransactionTypeormRepository } from './infrastructure/persistence/stellar-transaction.typeorm.repository';
+import { StellarController } from './interface/stellar.controller';
 
 @Module({
   imports: [
@@ -24,5 +25,6 @@ import { StellarTransactionTypeormRepository } from './infrastructure/persistenc
       useClass: StellarTransactionTypeormRepository,
     },
   ],
+  controllers: [StellarController],
 })
 export class StellarModule {}
