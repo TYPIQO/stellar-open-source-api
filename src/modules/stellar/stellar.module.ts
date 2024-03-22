@@ -4,11 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CommonModule } from '@/common/common.module';
 
 import { OdooModule } from '../odoo/odoo.module';
-import { ErrorMapper } from './application/mapper/error.mapper';
 import { STELLAR_TRANSACTION_REPOSITORY } from './application/repository/stellar-transaction.repository.interface';
 import { StellarService } from './application/services/stellar.service';
 import { StellarTransactionSchema } from './infrastructure/persistence/stellar-transaction.schema';
 import { StellarTransactionTypeormRepository } from './infrastructure/persistence/stellar-transaction.typeorm.repository';
+import { StellarController } from './interface/stellar.controller';
 
 @Module({
   imports: [
@@ -18,11 +18,11 @@ import { StellarTransactionTypeormRepository } from './infrastructure/persistenc
   ],
   providers: [
     StellarService,
-    ErrorMapper,
     {
       provide: STELLAR_TRANSACTION_REPOSITORY,
       useClass: StellarTransactionTypeormRepository,
     },
   ],
+  controllers: [StellarController],
 })
 export class StellarModule {}

@@ -3,11 +3,14 @@ import * as Odoo from 'odoo-await';
 
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
+import { OrderLine } from '../../domain/order-line.domain';
 import { ERROR_CODES, OdooError } from '../exceptions/odoo.error';
 import {
   IOdooActionRepository,
   ODOO_ACTION_REPOSITORY,
 } from '../repository/odoo-action.repository.interface';
+import { IOrderLineResponse } from '../responses/order-line.response.interface';
+import { ISaleOrderResponse } from '../responses/sale-order.response.interface';
 import { ACTIONS, MODEL } from './odoo.constants';
 import { IAutomation, IField, IModel, IServerAction } from './odoo.interfaces';
 
@@ -39,6 +42,29 @@ export class OdooService implements OnModuleInit {
       console.log(error);
       throw new OdooError(ERROR_CODES.CONNECT_ERROR);
     }
+  }
+
+  async getOrderLinesForOrder(id: number): Promise<number[]> {
+    const order = await this.odoo.searchRead<ISaleOrderResponse>(
+      MODEL.SALE_ORDER,
+      [['id', '=', id]],
+      [],
+    );
+
+    return order[0].order_line;
+  }
+
+  async getProductsForOrderLines(ids: number[]): Promise<OrderLine[]> {
+    const rawOrderLines = await this.odoo.searchRead<IOrderLineResponse>(
+      MODEL.ORDER_LINE,
+      [['id', 'in', ids]],
+      [],
+    );
+
+    return rawOrderLines.map((orderLine) => ({
+      productId: orderLine.product_id[0],
+      quantity: orderLine.product_uom_qty,
+    }));
   }
 
   private mergeSelections(

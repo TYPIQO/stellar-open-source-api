@@ -6,7 +6,7 @@ export enum MODEL {
   AUTOMATION = 'base.automation',
   SERVER_ACTION = 'ir.actions.server',
   SALE_ORDER = 'sale.order',
-  SALE_ORDER_LINE = 'sale.order.line',
+  ORDER_LINE = 'sale.order.line',
   STOCK_PICKING = 'stock.picking',
 }
 

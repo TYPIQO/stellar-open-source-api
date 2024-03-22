@@ -1,22 +1,20 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import Queue from 'queue';
 
-import {
-  ERROR_CODES,
-  StellarError,
-} from '@/common/application/exceptions/stellar.error';
+import { ERROR_CODES } from '@/common/application/exceptions/stellar.error';
 import {
   IAssetAmount,
   IStellarRepository,
   ISubmittedTransaction,
   STELLAR_REPOSITORY,
 } from '@/common/application/repository/stellar.repository.interface';
+import { OdooService } from '@/modules/odoo/application/services/odoo.service';
+import { OrderLine } from '@/modules/odoo/domain/order-line.domain';
 
 import {
   StellarTransaction,
   TRANSACTION_TYPE,
 } from '../../domain/stellar-transaction.domain';
-import { OrderLineDto } from '../dto/order-line.dto';
-import { ErrorMapper } from '../mapper/error.mapper';
 import {
   IStellarTransactionRepository,
   STELLAR_TRANSACTION_REPOSITORY,
@@ -24,13 +22,20 @@ import {
 
 @Injectable()
 export class StellarService implements OnModuleInit {
+  private queue: Queue;
+
   constructor(
-    private readonly errorMapper: ErrorMapper,
     @Inject(STELLAR_REPOSITORY)
     private readonly stellarRepository: IStellarRepository,
     @Inject(STELLAR_TRANSACTION_REPOSITORY)
     private readonly stellarTransactionRepository: IStellarTransactionRepository,
-  ) {}
+    private readonly odooService: OdooService,
+  ) {
+    this.queue = new Queue({
+      autostart: true,
+      concurrency: 1,
+    });
+  }
 
   async onModuleInit() {
     await this.stellarRepository.configureIssuerAccount();
@@ -50,7 +55,7 @@ export class StellarService implements OnModuleInit {
   }
 
   private transformOrderLinesToAssetAmounts(
-    orderLines: OrderLineDto[],
+    orderLines: OrderLine[],
   ): IAssetAmount[] {
     const amounts: IAssetAmount[] = [];
 
@@ -67,7 +72,7 @@ export class StellarService implements OnModuleInit {
   private validateTransaction(
     type: TRANSACTION_TYPE,
     transactions: StellarTransaction[],
-  ): void {
+  ): boolean {
     const validationMap = {
       [TRANSACTION_TYPE.CREATE]: {
         length: 0,
@@ -77,7 +82,7 @@ export class StellarService implements OnModuleInit {
       [TRANSACTION_TYPE.CONFIRM]: {
         length: 1,
         error: ERROR_CODES.ORDER_UNABLE_TO_CONFIRM_ERROR,
-        prevType: undefined,
+        prevType: TRANSACTION_TYPE.CREATE,
       },
       [TRANSACTION_TYPE.CONSOLIDATE]: {
         length: 2,
@@ -94,30 +99,43 @@ export class StellarService implements OnModuleInit {
     const expectedLength = validationMap[type].length;
     const expectedPrevType = validationMap[type].prevType;
     const actualLength = transactions.length;
-    const actualPrevType = transactions.pop()?.type;
+    const prevTransaction = transactions.pop();
 
-    if (
-      actualLength !== expectedLength ||
-      (expectedPrevType && actualPrevType !== expectedPrevType)
-    ) {
-      throw new StellarError(validationMap[type].error);
+    const hasWrongLength = actualLength !== expectedLength;
+    const hasWrongPrevType = prevTransaction?.type !== expectedPrevType;
+    const hasPrevTransactionFailed = prevTransaction?.hash === '';
+
+    if (hasWrongLength || hasWrongPrevType || hasPrevTransactionFailed) {
+      return false;
     }
+
+    return true;
   }
 
   async executeTransaction(
-    orderId: number,
-    orderLines: OrderLineDto[],
     type: TRANSACTION_TYPE,
+    orderId: number,
+    orderLines?: number[],
   ): Promise<string> {
+    const transactions =
+      await this.stellarTransactionRepository.getTransactionsForOrder(orderId);
+
+    const isValidTransaction = this.validateTransaction(type, transactions);
+
+    if (!isValidTransaction) {
+      return;
+    }
+
+    if (!orderLines) {
+      orderLines = await this.odooService.getOrderLinesForOrder(orderId);
+    }
+
+    const products = await this.odooService.getProductsForOrderLines(
+      orderLines,
+    );
+
     try {
-      const transactions =
-        await this.stellarTransactionRepository.getTransactionsForOrder(
-          orderId,
-        );
-
-      this.validateTransaction(type, transactions);
-
-      const amounts = this.transformOrderLinesToAssetAmounts(orderLines);
+      const amounts = this.transformOrderLinesToAssetAmounts(products);
 
       let transaction: ISubmittedTransaction;
       switch (type) {
@@ -144,7 +162,29 @@ export class StellarService implements OnModuleInit {
 
       return transaction.hash;
     } catch (error) {
-      this.errorMapper.map(error);
+      console.log(error);
+      await this.stellarTransactionRepository.create({
+        orderId,
+        type,
+        hash: '',
+        timestamp: new Date().toISOString(),
+      });
     }
+  }
+
+  pushTransaction(
+    type: TRANSACTION_TYPE,
+    orderId: number,
+    orderLines?: number[],
+  ): void {
+    this.queue.push(() => this.executeTransaction(type, orderId, orderLines));
+  }
+
+  async getTransactionsForOrder(
+    orderId: number,
+  ): Promise<StellarTransaction[]> {
+    return await this.stellarTransactionRepository.getTransactionsForOrder(
+      orderId,
+    );
   }
 }
