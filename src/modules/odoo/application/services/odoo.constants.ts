@@ -10,6 +10,13 @@ export enum MODEL {
   STOCK_PICKING = 'stock.picking',
 }
 
+export enum STATE {
+  DRAFT = 'draft',
+  SALE = 'sale',
+  ASSIGNED = 'assigned',
+  DONE = 'done',
+}
+
 export const ACTIONS: {
   [keyof in TRANSACTION_TYPE]: {
     serverAction: string;
