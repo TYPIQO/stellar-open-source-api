@@ -5,14 +5,17 @@ import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.d
 
 import { OrderLine } from '../../domain/order-line.domain';
 import { ERROR_CODES, OdooError } from '../exceptions/odoo.error';
+import { IAutomation } from '../interfaces/automation.interface';
+import { IField } from '../interfaces/field.interface';
+import { IModel } from '../interfaces/model.interface';
+import { IOrderLine } from '../interfaces/order-line.interface';
+import { ISaleOrder } from '../interfaces/sale-order.interface';
+import { IServerAction } from '../interfaces/server-action.interface';
 import {
   IOdooActionRepository,
   ODOO_ACTION_REPOSITORY,
 } from '../repository/odoo-action.repository.interface';
-import { IOrderLineResponse } from '../responses/order-line.response.interface';
-import { ISaleOrderResponse } from '../responses/sale-order.response.interface';
 import { ACTIONS, MODEL } from './odoo.constants';
-import { IAutomation, IField, IModel, IServerAction } from './odoo.interfaces';
 
 @Injectable()
 export class OdooService implements OnModuleInit {
@@ -45,7 +48,7 @@ export class OdooService implements OnModuleInit {
   }
 
   async getOrderLinesForOrder(id: number): Promise<number[]> {
-    const order = await this.odoo.searchRead<ISaleOrderResponse>(
+    const order = await this.odoo.searchRead<ISaleOrder>(
       MODEL.SALE_ORDER,
       [['id', '=', id]],
       [],
@@ -55,7 +58,7 @@ export class OdooService implements OnModuleInit {
   }
 
   async getProductsForOrderLines(ids: number[]): Promise<OrderLine[]> {
-    const rawOrderLines = await this.odoo.searchRead<IOrderLineResponse>(
+    const rawOrderLines = await this.odoo.searchRead<IOrderLine>(
       MODEL.ORDER_LINE,
       [['id', 'in', ids]],
       [],

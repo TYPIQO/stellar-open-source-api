@@ -5,8 +5,8 @@ import { AppModule } from '@/app.module';
 import { STELLAR_REPOSITORY } from '@/common/application/repository/stellar.repository.interface';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 
-import { IOrderLineResponse } from '../../responses/order-line.response.interface';
-import { ISaleOrderResponse } from '../../responses/sale-order.response.interface';
+import { IOrderLine } from '../../interfaces/order-line.interface';
+import { ISaleOrder } from '../../interfaces/sale-order.interface';
 import { OdooService } from '../odoo.service';
 
 const mockConnect = jest.fn();
@@ -65,7 +65,7 @@ describe('Odoo Service', () => {
 
   describe('Odoo Service - Get order lines for order', () => {
     it('Should get order lines for order', async () => {
-      const mockSaleOrder: ISaleOrderResponse = {
+      const mockSaleOrder: ISaleOrder = {
         order_line: [1, 2, 3],
       };
 
@@ -80,7 +80,7 @@ describe('Odoo Service', () => {
 
   describe('Odoo Service - Get products for order lines', () => {
     it('Should get products for order lines', async () => {
-      const mockOrderLines: IOrderLineResponse[] = [
+      const mockOrderLines: IOrderLine[] = [
         {
           product_id: [1, 'Product 1'],
           product_uom_qty: 10,
