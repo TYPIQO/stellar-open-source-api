@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CommonModule } from '@/common/common.module';
@@ -13,7 +13,7 @@ import { StellarController } from './interface/stellar.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([StellarTransactionSchema]),
-    OdooModule,
+    forwardRef(() => OdooModule),
     CommonModule,
   ],
   providers: [
@@ -24,5 +24,6 @@ import { StellarController } from './interface/stellar.controller';
     },
   ],
   controllers: [StellarController],
+  exports: [StellarService],
 })
 export class StellarModule {}

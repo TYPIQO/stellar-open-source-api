@@ -13,6 +13,7 @@ import * as request from 'supertest';
 import { loadFixtures } from '@data/util/loader';
 
 import { AppModule } from '@/app.module';
+import { StellarError } from '@/common/application/exceptions/stellar.error';
 import { StellarConfig } from '@/configuration/stellar.configuration';
 import { OdooService } from '@/modules/odoo/application/services/odoo.service';
 import {
@@ -20,10 +21,6 @@ import {
   TRANSACTION_TYPE,
 } from '@/modules/stellar/domain/stellar-transaction.domain';
 
-import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
-import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
-import { CreateOrderDto } from '../../application/dto/create-order.dto';
-import { DeliverOrderDto } from '../../application/dto/deliver-order.dto';
 import { StellarService } from '../../application/services/stellar.service';
 import {
   createBalances,
@@ -90,8 +87,11 @@ const createdOrderId = 1111;
 const confirmedOrderId = 2222;
 const consolidatedOrderId = 3333;
 const failedOrderId = 4444;
+const createdOrderToFailId = 5555;
+const confirmedOrderToFailId = 6666;
+const consolidatedOrderToFailId = 7777;
 
-describe('Stellar Service', () => {
+describe('Stellar Module', () => {
   let app: INestApplication;
   let stellarService: StellarService;
   let stellarConfig: StellarConfig;
@@ -137,6 +137,7 @@ describe('Stellar Service', () => {
 
   afterEach(() => {
     jest.resetAllMocks();
+    jest.restoreAllMocks();
   });
 
   function getOrderId() {
@@ -158,6 +159,35 @@ describe('Stellar Service', () => {
 
       const submittedTransaction = serverSpy.mock.calls[0][0] as Transaction;
       expect(hasSetFlagsOperation(submittedTransaction.operations)).toBe(true);
+    });
+
+    it('Should not configure the issuer account if it is already configured', async () => {
+      const mockIssuerAccount = createMockAccount(
+        keypairs.issuer.publicKey(),
+        true,
+      );
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      const serverSpy = jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockResolvedValueOnce(mockSubmittedTransaction as any);
+
+      await stellarService.onModuleInit();
+
+      expect(serverSpy).not.toBeCalled();
+    });
+
+    it('Should throw an error if there is an error in the Stellar transaction', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error());
+
+      await expect(stellarService.onModuleInit()).rejects.toThrow(StellarError);
     });
   });
 
@@ -383,7 +413,7 @@ describe('Stellar Service', () => {
       ).toBe(true);
     });
 
-    it('Should persist a failed transaction when a stellar transaction fails', async () => {
+    it('Should persist a failed transaction when a create transaction fails', async () => {
       const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
       const mockOrderId = getOrderId();
 
@@ -419,6 +449,108 @@ describe('Stellar Service', () => {
 
       expect(response).toBe(undefined);
       expect(trace).toEqual(expectedTrace);
+    });
+
+    it('Should persist a failed transaction when a confirm transaction fails', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockOrderId = createdOrderToFailId;
+
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error());
+
+      const response = await stellarService.executeTransaction(
+        TRANSACTION_TYPE.CONFIRM,
+        mockOrderId,
+      );
+
+      const failedTransaction: StellarTransaction = {
+        id: expect.any(Number),
+        type: TRANSACTION_TYPE.CONFIRM,
+        orderId: mockOrderId,
+        hash: '',
+        timestamp: expect.any(String),
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      };
+      const trace = await stellarService.getTransactionsForOrder(mockOrderId);
+
+      expect(response).toBe(undefined);
+      expect(trace).toContainEqual(failedTransaction);
+    });
+
+    it('Should persist a failed transaction when a consolidate transaction fails', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockOrderId = confirmedOrderToFailId;
+
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error());
+
+      const response = await stellarService.executeTransaction(
+        TRANSACTION_TYPE.CONSOLIDATE,
+        mockOrderId,
+      );
+
+      const failedTransaction: StellarTransaction = {
+        id: expect.any(Number),
+        type: TRANSACTION_TYPE.CONSOLIDATE,
+        orderId: mockOrderId,
+        hash: '',
+        timestamp: expect.any(String),
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      };
+      const trace = await stellarService.getTransactionsForOrder(mockOrderId);
+
+      expect(response).toBe(undefined);
+      expect(trace).toContainEqual(failedTransaction);
+    });
+
+    it('Should persist a failed transaction when a deliver transaction fails', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockOrderId = consolidatedOrderToFailId;
+
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount);
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error());
+
+      const response = await stellarService.executeTransaction(
+        TRANSACTION_TYPE.DELIVER,
+        mockOrderId,
+      );
+
+      const failedTransaction: StellarTransaction = {
+        id: expect.any(Number),
+        type: TRANSACTION_TYPE.DELIVER,
+        orderId: mockOrderId,
+        hash: '',
+        timestamp: expect.any(String),
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      };
+      const trace = await stellarService.getTransactionsForOrder(mockOrderId);
+
+      expect(response).toBe(undefined);
+      expect(trace).toContainEqual(failedTransaction);
     });
 
     it('Should return undefined if you want to make an invalid transaction for invalid length', async () => {
@@ -471,91 +603,6 @@ describe('Stellar Service', () => {
         .expect(HttpStatus.OK);
 
       expect(body).toEqual(expectedTrace);
-    });
-
-    it('POST /stellar/create - Should create an order', async () => {
-      const body = new CreateOrderDto();
-      body.id = getOrderId();
-      body.order_line = mockOrderLineIds;
-      body.state = 'draft';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/create')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CREATE,
-        body.id,
-        body.order_line,
-      );
-    });
-
-    it('POST /stellar/confirm - Should confirm an order', async () => {
-      const body = new ConfirmOrderDto();
-      body.id = getOrderId();
-      body.order_line = mockOrderLineIds;
-      body.state = 'sale';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/confirm')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CONFIRM,
-        body.id,
-        body.order_line,
-      );
-    });
-
-    it('POST /stellar/consolidate - Should consolidate an order', async () => {
-      const body = new ConsolidateOrderDto();
-      body.sale_id = getOrderId();
-      body.state = 'assigned';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/consolidate')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CONSOLIDATE,
-        body.sale_id,
-      );
-    });
-
-    it('POST /stellar/deliver - Should deliver an order', async () => {
-      const body = new DeliverOrderDto();
-      body.sale_id = getOrderId();
-      body.state = 'done';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/deliver')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
     });
   });
 });
