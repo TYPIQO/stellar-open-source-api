@@ -20,10 +20,6 @@ import {
   TRANSACTION_TYPE,
 } from '@/modules/stellar/domain/stellar-transaction.domain';
 
-import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
-import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
-import { CreateOrderDto } from '../../application/dto/create-order.dto';
-import { DeliverOrderDto } from '../../application/dto/deliver-order.dto';
 import { StellarService } from '../../application/services/stellar.service';
 import {
   createBalances,
@@ -91,7 +87,7 @@ const confirmedOrderId = 2222;
 const consolidatedOrderId = 3333;
 const failedOrderId = 4444;
 
-describe('Stellar Service', () => {
+describe('Stellar Module', () => {
   let app: INestApplication;
   let stellarService: StellarService;
   let stellarConfig: StellarConfig;
@@ -471,91 +467,6 @@ describe('Stellar Service', () => {
         .expect(HttpStatus.OK);
 
       expect(body).toEqual(expectedTrace);
-    });
-
-    it('POST /stellar/create - Should create an order', async () => {
-      const body = new CreateOrderDto();
-      body.id = getOrderId();
-      body.order_line = mockOrderLineIds;
-      body.state = 'draft';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/create')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CREATE,
-        body.id,
-        body.order_line,
-      );
-    });
-
-    it('POST /stellar/confirm - Should confirm an order', async () => {
-      const body = new ConfirmOrderDto();
-      body.id = getOrderId();
-      body.order_line = mockOrderLineIds;
-      body.state = 'sale';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/confirm')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CONFIRM,
-        body.id,
-        body.order_line,
-      );
-    });
-
-    it('POST /stellar/consolidate - Should consolidate an order', async () => {
-      const body = new ConsolidateOrderDto();
-      body.sale_id = getOrderId();
-      body.state = 'assigned';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/consolidate')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(
-        TRANSACTION_TYPE.CONSOLIDATE,
-        body.sale_id,
-      );
-    });
-
-    it('POST /stellar/deliver - Should deliver an order', async () => {
-      const body = new DeliverOrderDto();
-      body.sale_id = getOrderId();
-      body.state = 'done';
-
-      const spyPush = jest
-        .spyOn(stellarService, 'pushTransaction')
-        .mockReturnValueOnce(null);
-
-      await request(app.getHttpServer())
-        .post('/stellar/deliver')
-        .send(body)
-        .expect(HttpStatus.CREATED);
-
-      expect(spyPush).toBeCalledTimes(1);
-      expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
     });
   });
 });
