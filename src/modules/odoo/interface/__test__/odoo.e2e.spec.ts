@@ -7,6 +7,7 @@ import { STELLAR_REPOSITORY } from '@/common/application/repository/stellar.repo
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
+import { CancelOrderDto } from '../../application/dto/cancel-order.dto';
 import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
 import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
 import { CreateOrderDto } from '../../application/dto/create-order.dto';
@@ -128,5 +129,24 @@ describe('Odoo Module', () => {
 
     expect(spyPush).toBeCalledTimes(1);
     expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
+  });
+
+  it('POST /odoo/cancel - Should cancel an order', async () => {
+    const body = new CancelOrderDto();
+    body.id = 1;
+    body.state = 'cancel';
+    body.order_line = mockOrderLineIds;
+
+    const spyPush = jest
+      .spyOn(mockStellarService, 'pushTransaction')
+      .mockReturnValueOnce(null);
+
+    await request(app.getHttpServer())
+      .post('/odoo/cancel')
+      .send(body)
+      .expect(HttpStatus.CREATED);
+
+    expect(spyPush).toBeCalledTimes(1);
+    expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.CANCEL, body.id);
   });
 });
