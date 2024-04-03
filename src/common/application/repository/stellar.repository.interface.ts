@@ -16,4 +16,5 @@ export interface IStellarRepository {
   confirmOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction>;
   consolidateOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction>;
   deliverOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction>;
+  cancelOrder(hash: string): Promise<ISubmittedTransaction>;
 }

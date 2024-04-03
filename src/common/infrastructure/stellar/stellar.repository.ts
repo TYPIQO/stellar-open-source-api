@@ -151,7 +151,7 @@ export class StellarRepository implements IStellarRepository {
     builder: TransactionBuilder,
     sourceAccount: Horizon.AccountResponse,
     amounts: IAssetAmount[],
-  ): void {
+  ): boolean {
     const balancesToClear: HorizonApi.BalanceLineAsset<'credit_alphanum12'>[] =
       [];
 
@@ -178,15 +178,8 @@ export class StellarRepository implements IStellarRepository {
         }),
       );
     }
-  }
 
-  private async submitFeeBumpTransaction(
-    transaction: Transaction,
-  ): Promise<ISubmittedTransaction> {
-    const feeBumpTx = this.createFeeBumpTransaction(transaction);
-    return (await this.server.submitTransaction(
-      feeBumpTx,
-    )) as unknown as ISubmittedTransaction;
+    return balancesToClear.length > 0;
   }
 
   private async createPayments(
@@ -240,6 +233,68 @@ export class StellarRepository implements IStellarRepository {
           source,
           destination,
           signers,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private async submitClawbackWithRetry(
+    issuerAccount: Horizon.AccountResponse,
+    destination: Keypair,
+    payments: Horizon.ServerApi.PaymentOperationRecord[],
+  ): Promise<ISubmittedTransaction> {
+    const amounts: IAssetAmount[] = payments.map((payment) => ({
+      quantity: payment.amount,
+      assetCode: payment.asset_code,
+    }));
+
+    const destinationAccount = await this.server.loadAccount(
+      destination.publicKey(),
+    );
+
+    try {
+      const builder = new TransactionBuilder(issuerAccount, {
+        fee: this.TRANSACTION_MAX_FEE,
+        networkPassphrase: this.networkPassphrase,
+      });
+
+      payments.forEach((operation) => {
+        builder.addOperation(
+          Operation.clawback({
+            amount: operation.amount,
+            asset: new Asset(operation.asset_code, operation.asset_issuer),
+            from: operation.to,
+          }),
+        );
+      });
+
+      const hasDestinationClearBalances = this.addClearBalanceOperations(
+        builder,
+        destinationAccount,
+        amounts,
+      );
+
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(this.issuerKeypair);
+      if (hasDestinationClearBalances) {
+        tx.sign(destination);
+      }
+      return (await this.server.submitTransaction(
+        tx,
+      )) as unknown as ISubmittedTransaction;
+    } catch (error) {
+      const isTimeoutError = error.response?.data?.status === 504;
+      const isInsuficientFeeError =
+        error.response?.data?.extras?.result_codes?.transaction ===
+        'tx_insufficient_fee';
+
+      if (isTimeoutError || isInsuficientFeeError) {
+        return await this.submitClawbackWithRetry(
+          issuerAccount,
+          destination,
+          payments,
         );
       }
 
@@ -321,6 +376,44 @@ export class StellarRepository implements IStellarRepository {
       );
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
+    }
+  }
+
+  async cancelOrder(transactionHash: string): Promise<ISubmittedTransaction> {
+    const keypairs = [
+      this.distributorKeypair,
+      this.confirmKeypair,
+      this.consolidateKeypair,
+    ];
+
+    try {
+      const issuerAccount = await this.server.loadAccount(
+        this.issuerKeypair.publicKey(),
+      );
+      const { records } = await this.server
+        .operations()
+        .limit(100)
+        .forTransaction(transactionHash)
+        .call();
+
+      const payments = records.filter(
+        (operation) =>
+          operation.type === 'payment' &&
+          operation.asset_type === 'credit_alphanum12' &&
+          operation.asset_issuer === this.issuerKeypair.publicKey(),
+      ) as Horizon.ServerApi.PaymentOperationRecord[];
+
+      const destination = keypairs.find(
+        (keypair) => keypair.publicKey() === payments[0].to,
+      );
+
+      return await this.submitClawbackWithRetry(
+        issuerAccount,
+        destination,
+        payments,
+      );
+    } catch {
+      throw new StellarError(ERROR_CODES.CANCEL_ORDER_ERROR);
     }
   }
 }

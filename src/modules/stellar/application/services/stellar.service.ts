@@ -172,11 +172,55 @@ export class StellarService implements OnModuleInit {
     }
   }
 
+  async executeCancel(orderId: number): Promise<string> {
+    const transactions =
+      await this.stellarTransactionRepository.getTransactionsForOrder(orderId);
+
+    const lastValidTransaction = transactions
+      .reverse()
+      .find((transaction) => transaction.hash !== '');
+
+    if (
+      !lastValidTransaction ||
+      lastValidTransaction.type === TRANSACTION_TYPE.CANCEL ||
+      lastValidTransaction.type === TRANSACTION_TYPE.DELIVER
+    ) {
+      return;
+    }
+
+    try {
+      const transaction = await this.stellarRepository.cancelOrder(
+        lastValidTransaction.hash,
+      );
+
+      await this.stellarTransactionRepository.create({
+        orderId,
+        type: TRANSACTION_TYPE.CANCEL,
+        hash: transaction.hash,
+        timestamp: transaction.created_at,
+      });
+
+      return transaction.hash;
+    } catch (error) {
+      console.log(error);
+      await this.stellarTransactionRepository.create({
+        orderId,
+        type: TRANSACTION_TYPE.CANCEL,
+        hash: '',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   pushTransaction(
     type: TRANSACTION_TYPE,
     orderId: number,
     orderLines?: number[],
   ): void {
+    if (type === TRANSACTION_TYPE.CANCEL) {
+      this.queue.push(() => this.executeCancel(orderId));
+      return;
+    }
     this.queue.push(() => this.executeTransaction(type, orderId, orderLines));
   }
 
