@@ -39,6 +39,34 @@ jest.mock('queue', () => ({
   })),
 }));
 
+class TimeoutError extends Error {
+  response: object;
+  constructor() {
+    super();
+    this.response = {
+      data: {
+        status: 504,
+      },
+    };
+  }
+}
+
+class InsuficientFeeError extends Error {
+  response: object;
+  constructor() {
+    super();
+    this.response = {
+      data: {
+        extras: {
+          result_codes: {
+            transaction: 'tx_insufficient_fee',
+          },
+        },
+      },
+    };
+  }
+}
+
 const keypairs = {
   issuer: Keypair.random(),
   distributor: Keypair.random(),
@@ -581,6 +609,32 @@ describe('Stellar Module', () => {
       );
 
       expect(response).toBe(undefined);
+    });
+
+    it('Should retry a transaction if it fails due to a timeout or an insufficient fee', async () => {
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValue(mockIssuerAccount);
+
+      const serverSpy = jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new TimeoutError())
+        .mockRejectedValueOnce(new InsuficientFeeError())
+        .mockResolvedValueOnce(mockSubmittedTransaction as any);
+
+      const response = await stellarService.executeTransaction(
+        TRANSACTION_TYPE.CREATE,
+        getOrderId(),
+        mockOrderLineIds,
+      );
+
+      expect(serverSpy).toHaveBeenCalledTimes(3);
+      expect(response).toEqual(mockSubmittedTransaction.hash);
     });
   });
 

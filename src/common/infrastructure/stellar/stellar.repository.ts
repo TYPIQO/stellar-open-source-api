@@ -212,6 +212,41 @@ export class StellarRepository implements IStellarRepository {
     return builder;
   }
 
+  private async submitPaymentWithRetry(
+    amounts: IAssetAmount[],
+    source: Keypair,
+    destination: Keypair,
+    signers: Keypair[],
+  ): Promise<ISubmittedTransaction> {
+    try {
+      const builder = await this.createPayments(amounts, source, destination);
+
+      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+      tx.sign(...signers);
+
+      const feeBumpTx = this.createFeeBumpTransaction(tx);
+      return (await this.server.submitTransaction(
+        feeBumpTx,
+      )) as unknown as ISubmittedTransaction;
+    } catch (error) {
+      const isTimeoutError = error.response?.data?.status === 504;
+      const isInsuficientFeeError =
+        error.response?.data?.extras?.result_codes?.transaction ===
+        'tx_insufficient_fee';
+
+      if (isTimeoutError || isInsuficientFeeError) {
+        return await this.submitPaymentWithRetry(
+          amounts,
+          source,
+          destination,
+          signers,
+        );
+      }
+
+      throw error;
+    }
+  }
+
   async configureIssuerAccount(): Promise<void> {
     try {
       const issuerAccount = await this.server.loadAccount(
@@ -237,15 +272,12 @@ export class StellarRepository implements IStellarRepository {
 
   async createOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.submitPaymentWithRetry(
         amounts,
         this.issuerKeypair,
         this.distributorKeypair,
+        [this.issuerKeypair, this.distributorKeypair],
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.distributorKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CREATE_ORDER_ERROR);
     }
@@ -253,15 +285,12 @@ export class StellarRepository implements IStellarRepository {
 
   async confirmOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.submitPaymentWithRetry(
         amounts,
         this.distributorKeypair,
         this.confirmKeypair,
+        [this.issuerKeypair, this.distributorKeypair, this.confirmKeypair],
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.distributorKeypair, this.confirmKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIRM_ORDER_ERROR);
     }
@@ -271,15 +300,12 @@ export class StellarRepository implements IStellarRepository {
     amounts: IAssetAmount[],
   ): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.submitPaymentWithRetry(
         amounts,
         this.confirmKeypair,
         this.consolidateKeypair,
+        [this.issuerKeypair, this.confirmKeypair, this.consolidateKeypair],
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.confirmKeypair, this.consolidateKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONSOLIDATE_ORDER_ERROR);
     }
@@ -287,15 +313,12 @@ export class StellarRepository implements IStellarRepository {
 
   async deliverOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.submitPaymentWithRetry(
         amounts,
         this.consolidateKeypair,
         this.issuerKeypair,
+        [this.consolidateKeypair],
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.consolidateKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
     }
