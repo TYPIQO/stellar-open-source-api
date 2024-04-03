@@ -1,11 +1,13 @@
 import { Body, Controller, Post } from '@nestjs/common';
 
-import { ConfirmOrderDto } from '@/modules/odoo/application/dto/confirm-order.dto';
-import { ConsolidateOrderDto } from '@/modules/odoo/application/dto/consolidate-order.dto';
-import { CreateOrderDto } from '@/modules/odoo/application/dto/create-order.dto';
-import { DeliverOrderDto } from '@/modules/odoo/application/dto/deliver-order.dto';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
+
+import { CancelOrderDto } from '../application/dto/cancel-order.dto';
+import { ConfirmOrderDto } from '../application/dto/confirm-order.dto';
+import { ConsolidateOrderDto } from '../application/dto/consolidate-order.dto';
+import { CreateOrderDto } from '../application/dto/create-order.dto';
+import { DeliverOrderDto } from '../application/dto/deliver-order.dto';
 
 @Controller('odoo')
 export class OdooController {
@@ -40,5 +42,10 @@ export class OdooController {
   @Post('deliver')
   deliver(@Body() body: DeliverOrderDto): void {
     this.stellarService.pushTransaction(TRANSACTION_TYPE.DELIVER, body.sale_id);
+  }
+
+  @Post('cancel')
+  cancel(@Body() body: CancelOrderDto): void {
+    this.stellarService.pushTransaction(TRANSACTION_TYPE.CANCEL, body.id);
   }
 }
