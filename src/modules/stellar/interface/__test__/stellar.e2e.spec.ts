@@ -14,6 +14,7 @@ import { loadFixtures } from '@data/util/loader';
 
 import { AppModule } from '@/app.module';
 import { StellarError } from '@/common/application/exceptions/stellar.error';
+import { IAssetAmount } from '@/common/application/repository/stellar.repository.interface';
 import { StellarConfig } from '@/configuration/stellar.configuration';
 import { OdooService } from '@/modules/odoo/application/services/odoo.service';
 import {
@@ -25,6 +26,8 @@ import { StellarService } from '../../application/services/stellar.service';
 import {
   createBalances,
   createMockAccount,
+  createMockPayments,
+  hasClawbackOperation,
   hasClearBalanceOperation,
   hasPaymentOperation,
   hasSetFlagsOperation,
@@ -51,7 +54,7 @@ class TimeoutError extends Error {
   }
 }
 
-class InsuficientFeeError extends Error {
+class InsufficientFeeError extends Error {
   response: object;
   constructor() {
     super();
@@ -85,10 +88,19 @@ const mockSubmittedTransaction = {
   created_at: '2021-01-01T00:00:00Z',
 };
 
+const mockOperationsCall = jest.fn();
+
 const mockStellarConfig = {
   server: {
     loadAccount: jest.fn(),
     submitTransaction: jest.fn(),
+    operations: () => ({
+      limit: () => ({
+        forTransaction: () => ({
+          call: mockOperationsCall,
+        }),
+      }),
+    }),
   } as unknown as Horizon.Server,
   network: {
     url: 'https://horizon-testnet.stellar.org',
@@ -118,6 +130,10 @@ const failedOrderId = 4444;
 const createdOrderToFailId = 5555;
 const confirmedOrderToFailId = 6666;
 const consolidatedOrderToFailId = 7777;
+const orderToCancelId = 8888;
+const failedOrderToCancelId = 9999;
+const deliveredOrderToCancelId = 1000;
+const orderToCancelWithRetryId = 2000;
 
 describe('Stellar Module', () => {
   let app: INestApplication;
@@ -222,6 +238,11 @@ describe('Stellar Module', () => {
   describe('Stellar Service - Push transaction', () => {
     it('Should enqueue a transaction', async () => {
       stellarService.pushTransaction(TRANSACTION_TYPE.CREATE, getOrderId());
+      expect(mockPush).toBeCalledTimes(1);
+    });
+
+    it('Should enqueue a cancel transaction', async () => {
+      stellarService.pushTransaction(TRANSACTION_TYPE.CANCEL, getOrderId());
       expect(mockPush).toBeCalledTimes(1);
     });
   });
@@ -624,7 +645,7 @@ describe('Stellar Module', () => {
       const serverSpy = jest
         .spyOn(stellarConfig.server, 'submitTransaction')
         .mockRejectedValueOnce(new TimeoutError())
-        .mockRejectedValueOnce(new InsuficientFeeError())
+        .mockRejectedValueOnce(new InsufficientFeeError())
         .mockResolvedValueOnce(mockSubmittedTransaction as any);
 
       const response = await stellarService.executeTransaction(
@@ -635,6 +656,236 @@ describe('Stellar Module', () => {
 
       expect(serverSpy).toHaveBeenCalledTimes(3);
       expect(response).toEqual(mockSubmittedTransaction.hash);
+    });
+  });
+
+  describe('Stellar Service - Execute cancel', () => {
+    it('Should persist a failed movement when a timeout occurs', async () => {
+      const mockAmounts: IAssetAmount[] = [
+        { quantity: '10000', assetCode: 'ODOO00000000' },
+        { quantity: '10000', assetCode: 'ODOO00000001' },
+      ];
+
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockDistributorAccount = createMockAccount(
+        keypairs.distributor.publicKey(),
+        false,
+        createBalances(mockAmounts, keypairs.issuer.publicKey()),
+      );
+
+      const expectedTransactions = expect.arrayContaining([
+        expect.objectContaining({
+          type: 'cancel',
+          timestamp: expect.any(String),
+          hash: '',
+          orderId: orderToCancelId,
+        }),
+      ]);
+
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount)
+        .mockResolvedValueOnce(mockDistributorAccount);
+
+      mockOperationsCall.mockReturnValueOnce(
+        createMockPayments(
+          keypairs.issuer.publicKey(),
+          keypairs.distributor.publicKey(),
+          mockAmounts,
+          keypairs.issuer.publicKey(),
+        ),
+      );
+
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValue(new Error());
+
+      await stellarService.executeCancel(orderToCancelId);
+
+      const transactions = await stellarService.getTransactionsForOrder(
+        orderToCancelId,
+      );
+      expect(transactions).toEqual(expectedTransactions);
+    });
+
+    it('Should cancel a transaction and clear the empty balances', async () => {
+      const mockAmounts: IAssetAmount[] = [
+        { quantity: '10000', assetCode: 'ODOO00000000' },
+        { quantity: '10000', assetCode: 'ODOO00000001' },
+      ];
+
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockDistributorAccount = createMockAccount(
+        keypairs.distributor.publicKey(),
+        false,
+        createBalances(mockAmounts, keypairs.issuer.publicKey()),
+      );
+
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount)
+        .mockResolvedValueOnce(mockDistributorAccount);
+
+      mockOperationsCall.mockReturnValueOnce(
+        createMockPayments(
+          keypairs.issuer.publicKey(),
+          keypairs.distributor.publicKey(),
+          mockAmounts,
+          keypairs.issuer.publicKey(),
+        ),
+      );
+
+      const serverSpy = jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockResolvedValue(mockSubmittedTransaction as any);
+
+      const expectedTransactions = expect.arrayContaining([
+        expect.objectContaining({
+          type: 'create',
+          timestamp: expect.any(String),
+          hash: expect.any(String),
+          orderId: orderToCancelId,
+        }),
+        expect.objectContaining({
+          type: 'cancel',
+          timestamp: expect.any(String),
+          hash: expect.any(String),
+          orderId: orderToCancelId,
+        }),
+      ]);
+
+      await stellarService.executeCancel(orderToCancelId);
+
+      const submittedTransaction = serverSpy.mock.calls[0][0] as Transaction;
+      const operations = submittedTransaction.operations;
+
+      expect(
+        hasClawbackOperation(
+          operations,
+          mockAmounts.map((a) => a.assetCode),
+          keypairs.distributor.publicKey(),
+        ),
+      ).toBe(true);
+      expect(
+        hasClearBalanceOperation(
+          operations,
+          mockAmounts.map((a) => a.assetCode),
+        ),
+      ).toBe(true);
+
+      const transactions = await stellarService.getTransactionsForOrder(
+        orderToCancelId,
+      );
+      expect(transactions).toEqual(expectedTransactions);
+    });
+
+    it('Should cancel the last valid transaction from a failed order', async () => {
+      const mockAmounts: IAssetAmount[] = [
+        { quantity: '10000', assetCode: 'ODOO00000000' },
+        { quantity: '10000', assetCode: 'ODOO00000001' },
+      ];
+
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockDistributorAccount = createMockAccount(
+        keypairs.distributor.publicKey(),
+        false,
+        createBalances(mockAmounts, keypairs.issuer.publicKey()),
+      );
+
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount)
+        .mockResolvedValueOnce(mockDistributorAccount);
+
+      mockOperationsCall.mockReturnValueOnce(
+        createMockPayments(
+          keypairs.issuer.publicKey(),
+          keypairs.distributor.publicKey(),
+          mockAmounts,
+          keypairs.issuer.publicKey(),
+        ),
+      );
+
+      const serverSpy = jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockResolvedValue(mockSubmittedTransaction as any);
+
+      await stellarService.executeCancel(failedOrderToCancelId);
+
+      const submittedTransaction = serverSpy.mock.calls[0][0] as Transaction;
+      const operations = submittedTransaction.operations;
+
+      expect(
+        hasClawbackOperation(
+          operations,
+          mockAmounts.map((a) => a.assetCode),
+          keypairs.distributor.publicKey(),
+        ),
+      ).toBe(true);
+      expect(
+        hasClearBalanceOperation(
+          operations,
+          mockAmounts.map((a) => a.assetCode),
+        ),
+      ).toBe(true);
+    });
+
+    it('Should retry a cancel if it fails due to a timeout or an insufficient fee', async () => {
+      const mockAmounts: IAssetAmount[] = [
+        { quantity: '10000', assetCode: 'ODOO00000000' },
+        { quantity: '10000', assetCode: 'ODOO00000001' },
+      ];
+
+      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockDistributorAccount = createMockAccount(
+        keypairs.distributor.publicKey(),
+        false,
+        createBalances(mockAmounts, keypairs.issuer.publicKey()),
+      );
+
+      jest
+        .spyOn(stellarConfig.server, 'loadAccount')
+        .mockResolvedValueOnce(mockIssuerAccount)
+        .mockResolvedValue(mockDistributorAccount);
+
+      mockOperationsCall.mockReturnValueOnce(
+        createMockPayments(
+          keypairs.issuer.publicKey(),
+          keypairs.distributor.publicKey(),
+          mockAmounts,
+          keypairs.issuer.publicKey(),
+        ),
+      );
+
+      const serverSpy = jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new TimeoutError())
+        .mockRejectedValueOnce(new InsufficientFeeError())
+        .mockReturnValueOnce(mockSubmittedTransaction as any);
+
+      const response = await stellarService.executeCancel(
+        orderToCancelWithRetryId,
+      );
+
+      expect(serverSpy).toBeCalledTimes(3);
+      expect(response).toBe(mockSubmittedTransaction.hash);
+    });
+
+    it('Should not cancel a not created order', async () => {
+      const response = await stellarService.executeCancel(getOrderId());
+      expect(response).toBeUndefined();
+    });
+
+    it('Should not cancel a cancelled order', async () => {
+      const response = await stellarService.executeCancel(orderToCancelId);
+      expect(response).toBeUndefined();
+    });
+
+    it('Should not cancel a delivered order', async () => {
+      const response = await stellarService.executeCancel(
+        deliveredOrderToCancelId,
+      );
+      expect(response).toBeUndefined();
     });
   });
 

@@ -64,6 +64,28 @@ export function createMockAccount(
   } as unknown as Horizon.AccountResponse;
 }
 
+export function createMockPayments(
+  from: string,
+  to: string,
+  amounts: IAssetAmount[],
+  issuer: string,
+): { records: Horizon.ServerApi.OperationRecord[] } {
+  return {
+    records: amounts.map(
+      (amount) =>
+        ({
+          type: Horizon.HorizonApi.OperationResponseType.payment,
+          from,
+          to,
+          amount: amount.quantity,
+          asset_code: amount.assetCode,
+          asset_issuer: issuer,
+          asset_type: 'credit_alphanum12',
+        } as unknown as Horizon.ServerApi.OperationRecord),
+    ),
+  };
+}
+
 export function hasSetFlagsOperation(operations: Operation[]) {
   const hasRequiredFlag = operations.some(
     (operation) => operation.type === 'setOptions' && operation.setFlags === 1,
@@ -143,5 +165,25 @@ export function hasClearBalanceOperation(
       return false;
     }
   }
+  return true;
+}
+
+export function hasClawbackOperation(
+  operations: Operation[],
+  assetCodes: string[],
+  from: string,
+): boolean {
+  for (const assetCode of assetCodes) {
+    const operation = operations.find(
+      (operation) =>
+        operation.type === 'clawback' &&
+        operation.from === from &&
+        operation.asset.code === assetCode,
+    );
+    if (!operation) {
+      return false;
+    }
+  }
+
   return true;
 }
