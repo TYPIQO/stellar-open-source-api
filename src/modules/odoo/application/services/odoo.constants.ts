@@ -15,6 +15,7 @@ export enum STATE {
   SALE = 'sale',
   ASSIGNED = 'assigned',
   DONE = 'done',
+  CANCEL = 'cancel',
 }
 
 const FIELDS = {
@@ -37,6 +38,13 @@ export const ACTIONS: {
     fields: { model: MODEL; fields: string[] };
   };
 } = {
+  cancel: {
+    serverAction: 'CANCEL-ORDER-ACTION',
+    automation: 'CANCEL-ORDER-AUTOMATION',
+    endpoint: `${process.env.SERVER_URL}/api/odoo/cancel`,
+    state: STATE.CANCEL,
+    fields: FIELDS[MODEL.SALE_ORDER],
+  },
   create: {
     serverAction: 'CREATE-ORDER-ACTION',
     automation: 'CREATE-ORDER-AUTOMATION',

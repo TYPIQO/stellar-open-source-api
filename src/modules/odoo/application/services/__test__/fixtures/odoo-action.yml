@@ -2,19 +2,25 @@ entity: OdooAction
 items:
   odooAction0:
     type: 'create'
-    serverActionName: 'CREATE ORDER ACTION'
+    serverActionName: 'CREATE-ORDER-ACTION'
     serverActionId: 1
-    automationName: 'CREATE ORDER AUTOMATION'
+    automationName: 'CREATE-ORDER-AUTOMATION'
     automationId: 1
   odooAction1:
     type: 'confirm'
-    serverActionName: 'CONFIRM ORDER ACTION'
+    serverActionName: 'CONFIRM-ORDER-ACTION'
     serverActionId: 2
-    automationName: 'CONFIRM ORDER AUTOMATION'
+    automationName: 'CONFIRM-ORDER-AUTOMATION'
     automationId: 2
   odooAction2:
     type: 'consolidate'
-    serverActionName: 'CONSOLIDATE ORDER ACTION'
+    serverActionName: 'CONSOLIDATE-ORDER-ACTION'
     serverActionId: 3
-    automationName: 'CONSOLIDATE ORDER AUTOMATION'
+    automationName: 'CONSOLIDATE-ORDER-AUTOMATION'
     automationId: 3
+  odooAction3:
+    type: 'cancel'
+    serverActionName: 'CANCEL-ORDER-ACTION'
+    serverActionId: 4
+    automationName: 'CANCEL-ORDER-AUTOMATION'
+    automationId: 4
