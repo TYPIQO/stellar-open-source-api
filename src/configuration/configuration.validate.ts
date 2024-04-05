@@ -10,4 +10,13 @@ export const configurationValidate = Joi.object({
   DB_NAME: Joi.string().required(),
   SONAR_SERVER_URL: Joi.string().required(),
   SONAR_TOKEN: Joi.string().required(),
+  STELLAR_NETWORK: Joi.string().required(),
+  STELLAR_ISSUER_SECRET_KEY: Joi.string().required(),
+  STELLAR_DISTRIBUTOR_SECRET_KEY: Joi.string().required(),
+  STELLAR_CONFIRM_SECRET_KEY: Joi.string().required(),
+  STELLAR_CONSOLIDATE_SECRET_KEY: Joi.string().required(),
+  ODOO_URL: Joi.string().required(),
+  ODOO_DATABASE: Joi.string().required(),
+  ODOO_USERNAME: Joi.string().required(),
+  ODOO_PASSWORD: Joi.string().required(),
 });

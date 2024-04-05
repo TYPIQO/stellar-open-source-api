@@ -9,8 +9,8 @@ import { datasourceOptions } from '@configuration/orm.configuration';
 
 import { CommonModule } from '@common/common.module';
 
-import { AuthorModule } from '@/modules/author/author.module';
-import { BookModule } from '@/modules/book/book.module';
+import { OdooModule } from './modules/odoo/odoo.module';
+import { StellarModule } from './modules/stellar/stellar.module';
 
 @Module({
   imports: [
@@ -29,8 +29,8 @@ import { BookModule } from '@/modules/book/book.module';
       },
     }),
     CommonModule,
-    AuthorModule,
-    BookModule,
+    OdooModule,
+    StellarModule,
   ],
   controllers: [],
   providers: [],
