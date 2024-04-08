@@ -3,13 +3,16 @@ import Queue from 'queue';
 
 import { ERROR_CODES } from '@/common/application/exceptions/stellar.error';
 import {
+  IOdooOrderLine,
+  IOdooRepository,
+  ODOO_REPOSITORY,
+} from '@/common/application/repository/odoo.repository.interface';
+import {
   IAssetAmount,
   IStellarRepository,
   ISubmittedTransaction,
   STELLAR_REPOSITORY,
 } from '@/common/application/repository/stellar.repository.interface';
-import { OdooService } from '@/modules/odoo/application/services/odoo.service';
-import { OrderLine } from '@/modules/odoo/domain/order-line.domain';
 
 import {
   StellarTransaction,
@@ -29,7 +32,8 @@ export class StellarService implements OnModuleInit {
     private readonly stellarRepository: IStellarRepository,
     @Inject(STELLAR_TRANSACTION_REPOSITORY)
     private readonly stellarTransactionRepository: IStellarTransactionRepository,
-    private readonly odooService: OdooService,
+    @Inject(ODOO_REPOSITORY)
+    private readonly odooRepository: IOdooRepository,
   ) {
     this.queue = new Queue({
       autostart: true,
@@ -55,7 +59,7 @@ export class StellarService implements OnModuleInit {
   }
 
   private transformOrderLinesToAssetAmounts(
-    orderLines: OrderLine[],
+    orderLines: IOdooOrderLine[],
   ): IAssetAmount[] {
     const amounts: IAssetAmount[] = [];
 
@@ -127,10 +131,10 @@ export class StellarService implements OnModuleInit {
     }
 
     if (!orderLines) {
-      orderLines = await this.odooService.getOrderLinesForOrder(orderId);
+      orderLines = await this.odooRepository.getOrderLinesForOrder(orderId);
     }
 
-    const products = await this.odooService.getProductsForOrderLines(
+    const products = await this.odooRepository.getProductsForOrderLines(
       orderLines,
     );
 

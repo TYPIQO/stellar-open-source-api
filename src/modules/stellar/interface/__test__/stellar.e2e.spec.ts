@@ -14,8 +14,9 @@ import { loadFixtures } from '@data/util/loader';
 
 import { AppModule } from '@/app.module';
 import { StellarError } from '@/common/application/exceptions/stellar.error';
+import { ODOO_REPOSITORY } from '@/common/application/repository/odoo.repository.interface';
 import { StellarConfig } from '@/configuration/stellar.configuration';
-import { OdooService } from '@/modules/odoo/application/services/odoo.service';
+import { ActionService } from '@/modules/action/application/services/action.service';
 import {
   StellarTransaction,
   TRANSACTION_TYPE,
@@ -68,10 +69,14 @@ const mockStellarConfig = {
   },
 } as StellarConfig;
 
-const mockOdooService = {
+const mockOdooRepository = {
   onModuleInit: jest.fn(),
   getOrderLinesForOrder: jest.fn(),
   getProductsForOrderLines: jest.fn(),
+};
+
+const mockActionService = {
+  onModuleInit: jest.fn(),
 };
 
 const mockOrderLines = [
@@ -102,8 +107,10 @@ describe('Stellar Module', () => {
     })
       .overrideProvider(StellarConfig)
       .useValue(mockStellarConfig)
-      .overrideProvider(OdooService)
-      .useValue(mockOdooService)
+      .overrideProvider(ODOO_REPOSITORY)
+      .useValue(mockOdooRepository)
+      .overrideProvider(ActionService)
+      .useValue(mockActionService)
       .compile();
 
     await loadFixtures(
@@ -204,7 +211,7 @@ describe('Stellar Module', () => {
       const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -254,7 +261,7 @@ describe('Stellar Module', () => {
       );
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -310,10 +317,10 @@ describe('Stellar Module', () => {
       );
 
       jest
-        .spyOn(mockOdooService, 'getOrderLinesForOrder')
+        .spyOn(mockOdooRepository, 'getOrderLinesForOrder')
         .mockResolvedValueOnce(mockOrderLineIds);
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -365,10 +372,10 @@ describe('Stellar Module', () => {
       );
 
       jest
-        .spyOn(mockOdooService, 'getOrderLinesForOrder')
+        .spyOn(mockOdooRepository, 'getOrderLinesForOrder')
         .mockResolvedValueOnce(mockOrderLineIds);
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -418,7 +425,7 @@ describe('Stellar Module', () => {
       const mockOrderId = getOrderId();
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -456,7 +463,7 @@ describe('Stellar Module', () => {
       const mockOrderId = createdOrderToFailId;
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -490,7 +497,7 @@ describe('Stellar Module', () => {
       const mockOrderId = confirmedOrderToFailId;
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
@@ -524,7 +531,7 @@ describe('Stellar Module', () => {
       const mockOrderId = consolidatedOrderToFailId;
 
       jest
-        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .spyOn(mockOdooRepository, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')

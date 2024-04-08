@@ -1,9 +1,8 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CommonModule } from '@/common/common.module';
 
-import { OdooModule } from '../odoo/odoo.module';
 import { STELLAR_TRANSACTION_REPOSITORY } from './application/repository/stellar-transaction.repository.interface';
 import { StellarService } from './application/services/stellar.service';
 import { StellarTransactionSchema } from './infrastructure/persistence/stellar-transaction.schema';
@@ -11,11 +10,7 @@ import { StellarTransactionTypeormRepository } from './infrastructure/persistenc
 import { StellarController } from './interface/stellar.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([StellarTransactionSchema]),
-    forwardRef(() => OdooModule),
-    CommonModule,
-  ],
+  imports: [TypeOrmModule.forFeature([StellarTransactionSchema]), CommonModule],
   providers: [
     StellarService,
     {
