@@ -1,14 +1,15 @@
 import { Body, Controller, Post } from '@nestjs/common';
 
-import { ConfirmOrderDto } from '@/modules/odoo/application/dto/confirm-order.dto';
-import { ConsolidateOrderDto } from '@/modules/odoo/application/dto/consolidate-order.dto';
-import { CreateOrderDto } from '@/modules/odoo/application/dto/create-order.dto';
-import { DeliverOrderDto } from '@/modules/odoo/application/dto/deliver-order.dto';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
-@Controller('odoo')
-export class OdooController {
+import { ConfirmOrderDto } from '../application/dto/confirm-order.dto';
+import { ConsolidateOrderDto } from '../application/dto/consolidate-order.dto';
+import { CreateOrderDto } from '../application/dto/create-order.dto';
+import { DeliverOrderDto } from '../application/dto/deliver-order.dto';
+
+@Controller('warehouse')
+export class WarehouseController {
   constructor(private readonly stellarService: StellarService) {}
 
   @Post('create')

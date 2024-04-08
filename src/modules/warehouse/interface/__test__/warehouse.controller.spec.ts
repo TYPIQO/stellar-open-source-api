@@ -3,7 +3,8 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 
 import { AppModule } from '@/app.module';
-import { STELLAR_REPOSITORY } from '@/common/application/repository/stellar.repository.interface';
+import { ODOO_REPOSITORY } from '@/common/application/repository/odoo.repository.interface';
+import { ActionService } from '@/modules/action/application/services/action.service';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
@@ -11,16 +12,23 @@ import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
 import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
 import { CreateOrderDto } from '../../application/dto/create-order.dto';
 import { DeliverOrderDto } from '../../application/dto/deliver-order.dto';
-import { OdooService } from '../../application/services/odoo.service';
 
 const mockStellarService = {
   onModuleInit: jest.fn(),
   pushTransaction: jest.fn(),
 };
 
+const mockOdooRepository = {
+  onModuleInit: jest.fn(),
+};
+
+const mockActionService = {
+  onModuleInit: jest.fn(),
+};
+
 const mockOrderLineIds = [10, 20];
 
-describe('Odoo Module', () => {
+describe('Warehouse Controller', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -29,10 +37,10 @@ describe('Odoo Module', () => {
     })
       .overrideProvider(StellarService)
       .useValue(mockStellarService)
-      .overrideProvider(STELLAR_REPOSITORY)
-      .useValue({})
-      .overrideProvider(OdooService)
-      .useValue({})
+      .overrideProvider(ODOO_REPOSITORY)
+      .useValue(mockOdooRepository)
+      .overrideProvider(ActionService)
+      .useValue(mockActionService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -48,7 +56,7 @@ describe('Odoo Module', () => {
     jest.resetAllMocks();
   });
 
-  it('POST /odoo/create - Should create an order', async () => {
+  it('POST /warehouse/create - Should create an order', async () => {
     const body = new CreateOrderDto();
     body.id = 1;
     body.order_line = mockOrderLineIds;
@@ -59,7 +67,7 @@ describe('Odoo Module', () => {
       .mockReturnValueOnce(null);
 
     await request(app.getHttpServer())
-      .post('/odoo/create')
+      .post('/warehouse/create')
       .send(body)
       .expect(HttpStatus.CREATED);
 
@@ -71,7 +79,7 @@ describe('Odoo Module', () => {
     );
   });
 
-  it('POST /odoo/confirm - Should confirm an order', async () => {
+  it('POST /warehouse/confirm - Should confirm an order', async () => {
     const body = new ConfirmOrderDto();
     body.id = 1;
     body.order_line = mockOrderLineIds;
@@ -82,7 +90,7 @@ describe('Odoo Module', () => {
       .mockReturnValueOnce(null);
 
     await request(app.getHttpServer())
-      .post('/odoo/confirm')
+      .post('/warehouse/confirm')
       .send(body)
       .expect(HttpStatus.CREATED);
 
@@ -94,7 +102,7 @@ describe('Odoo Module', () => {
     );
   });
 
-  it('POST /odoo/consolidate - Should consolidate an order', async () => {
+  it('POST /warehouse/consolidate - Should consolidate an order', async () => {
     const body = new ConsolidateOrderDto();
     body.sale_id = 1;
     body.state = 'assigned';
@@ -104,7 +112,7 @@ describe('Odoo Module', () => {
       .mockReturnValueOnce(null);
 
     await request(app.getHttpServer())
-      .post('/odoo/consolidate')
+      .post('/warehouse/consolidate')
       .send(body)
       .expect(HttpStatus.CREATED);
 
@@ -112,7 +120,7 @@ describe('Odoo Module', () => {
     expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.CONSOLIDATE, body.sale_id);
   });
 
-  it('POST /odoo/deliver - Should deliver an order', async () => {
+  it('POST /warehouse/deliver - Should deliver an order', async () => {
     const body = new DeliverOrderDto();
     body.sale_id = 1;
     body.state = 'done';
@@ -122,7 +130,7 @@ describe('Odoo Module', () => {
       .mockReturnValueOnce(null);
 
     await request(app.getHttpServer())
-      .post('/odoo/deliver')
+      .post('/warehouse/deliver')
       .send(body)
       .expect(HttpStatus.CREATED);
 

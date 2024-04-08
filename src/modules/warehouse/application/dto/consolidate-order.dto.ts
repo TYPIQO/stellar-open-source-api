@@ -1,6 +1,6 @@
 import { Equals } from 'class-validator';
 
-import { STATE } from '@/modules/odoo/application/services/odoo.constants';
+import { STATE } from '@/common/infrastructure/odoo/odoo.constants';
 
 import { StockPickingDto } from './stock-picking.dto';
 
