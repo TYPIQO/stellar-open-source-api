@@ -13,7 +13,7 @@ export const ACTIONS: {
   cancel: {
     serverActionName: 'CANCEL-ORDER-ACTION',
     automationName: 'CANCEL-ORDER-AUTOMATION',
-    endpoint: `${process.env.SERVER_URL}/api/warehouse/cancel`,
+    endpoint: `${process.env.SERVER_URL}/api/warehouse/order`,
     state: STATE.CANCEL,
     modelName: MODEL.SALE_ORDER,
     fieldNames: SALE_ORDER_FIELDS,
@@ -21,7 +21,7 @@ export const ACTIONS: {
   create: {
     serverActionName: 'CREATE-ORDER-ACTION',
     automationName: 'CREATE-ORDER-AUTOMATION',
-    endpoint: `${process.env.SERVER_URL}/api/warehouse/create`,
+    endpoint: `${process.env.SERVER_URL}/api/warehouse/order`,
     state: STATE.DRAFT,
     modelName: MODEL.SALE_ORDER,
     fieldNames: SALE_ORDER_FIELDS,
@@ -29,7 +29,7 @@ export const ACTIONS: {
   confirm: {
     serverActionName: 'CONFIRM-ORDER-ACTION',
     automationName: 'CONFIRM-ORDER-AUTOMATION',
-    endpoint: `${process.env.SERVER_URL}/api/warehouse/confirm`,
+    endpoint: `${process.env.SERVER_URL}/api/warehouse/order`,
     state: STATE.SALE,
     modelName: MODEL.SALE_ORDER,
     fieldNames: SALE_ORDER_FIELDS,
@@ -37,7 +37,7 @@ export const ACTIONS: {
   consolidate: {
     serverActionName: 'CONSOLIDATE-ORDER-ACTION',
     automationName: 'CONSOLIDATE-ORDER-AUTOMATION',
-    endpoint: `${process.env.SERVER_URL}/api/warehouse/consolidate`,
+    endpoint: `${process.env.SERVER_URL}/api/warehouse/order`,
     state: STATE.ASSIGNED,
     modelName: MODEL.STOCK_PICKING,
     fieldNames: STOCK_PICKING_FIELDS,
@@ -45,7 +45,7 @@ export const ACTIONS: {
   deliver: {
     serverActionName: 'DELIVER-ORDER-ACTION',
     automationName: 'DELIVER-ORDER-AUTOMATION',
-    endpoint: `${process.env.SERVER_URL}/api/warehouse/deliver`,
+    endpoint: `${process.env.SERVER_URL}/api/warehouse/order`,
     state: STATE.DONE,
     modelName: MODEL.STOCK_PICKING,
     fieldNames: STOCK_PICKING_FIELDS,

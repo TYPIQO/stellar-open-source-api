@@ -8,10 +8,8 @@ import { ActionService } from '@/modules/action/application/services/action.serv
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
-import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
-import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
-import { CreateOrderDto } from '../../application/dto/create-order.dto';
-import { DeliverOrderDto } from '../../application/dto/deliver-order.dto';
+import { SaleOrderDto } from '../../application/dto/sale-order.dto';
+import { StockPickingDto } from '../../application/dto/stock-picking.dto';
 
 const mockStellarService = {
   onModuleInit: jest.fn(),
@@ -56,85 +54,90 @@ describe('Warehouse Controller', () => {
     jest.resetAllMocks();
   });
 
-  it('POST /warehouse/create - Should create an order', async () => {
-    const body = new CreateOrderDto();
-    body.id = 1;
-    body.order_line = mockOrderLineIds;
-    body.state = 'draft';
+  describe('POST /warehouse/order - Process order', () => {
+    it('Should create an order', async () => {
+      const body = new SaleOrderDto();
+      body.id = 1;
+      body.order_line = mockOrderLineIds;
+      body.state = 'draft';
 
-    const spyPush = jest
-      .spyOn(mockStellarService, 'pushTransaction')
-      .mockReturnValueOnce(null);
+      const spyPush = jest
+        .spyOn(mockStellarService, 'pushTransaction')
+        .mockReturnValueOnce(null);
 
-    await request(app.getHttpServer())
-      .post('/warehouse/create')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      await request(app.getHttpServer())
+        .post('/warehouse/order')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyPush).toBeCalledTimes(1);
-    expect(spyPush).toBeCalledWith(
-      TRANSACTION_TYPE.CREATE,
-      body.id,
-      body.order_line,
-    );
-  });
+      expect(spyPush).toBeCalledTimes(1);
+      expect(spyPush).toBeCalledWith(
+        TRANSACTION_TYPE.CREATE,
+        body.id,
+        body.order_line,
+      );
+    });
 
-  it('POST /warehouse/confirm - Should confirm an order', async () => {
-    const body = new ConfirmOrderDto();
-    body.id = 1;
-    body.order_line = mockOrderLineIds;
-    body.state = 'sale';
+    it('Should confirm an order', async () => {
+      const body = new SaleOrderDto();
+      body.id = 1;
+      body.order_line = mockOrderLineIds;
+      body.state = 'sale';
 
-    const spyPush = jest
-      .spyOn(mockStellarService, 'pushTransaction')
-      .mockReturnValueOnce(null);
+      const spyPush = jest
+        .spyOn(mockStellarService, 'pushTransaction')
+        .mockReturnValueOnce(null);
 
-    await request(app.getHttpServer())
-      .post('/warehouse/confirm')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      await request(app.getHttpServer())
+        .post('/warehouse/order')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyPush).toBeCalledTimes(1);
-    expect(spyPush).toBeCalledWith(
-      TRANSACTION_TYPE.CONFIRM,
-      body.id,
-      body.order_line,
-    );
-  });
+      expect(spyPush).toBeCalledTimes(1);
+      expect(spyPush).toBeCalledWith(
+        TRANSACTION_TYPE.CONFIRM,
+        body.id,
+        body.order_line,
+      );
+    });
 
-  it('POST /warehouse/consolidate - Should consolidate an order', async () => {
-    const body = new ConsolidateOrderDto();
-    body.sale_id = 1;
-    body.state = 'assigned';
+    it('Should consolidate an order', async () => {
+      const body = new StockPickingDto();
+      body.sale_id = 1;
+      body.state = 'assigned';
 
-    const spyPush = jest
-      .spyOn(mockStellarService, 'pushTransaction')
-      .mockReturnValueOnce(null);
+      const spyPush = jest
+        .spyOn(mockStellarService, 'pushTransaction')
+        .mockReturnValueOnce(null);
 
-    await request(app.getHttpServer())
-      .post('/warehouse/consolidate')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      await request(app.getHttpServer())
+        .post('/warehouse/order')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyPush).toBeCalledTimes(1);
-    expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.CONSOLIDATE, body.sale_id);
-  });
+      expect(spyPush).toBeCalledTimes(1);
+      expect(spyPush).toBeCalledWith(
+        TRANSACTION_TYPE.CONSOLIDATE,
+        body.sale_id,
+      );
+    });
 
-  it('POST /warehouse/deliver - Should deliver an order', async () => {
-    const body = new DeliverOrderDto();
-    body.sale_id = 1;
-    body.state = 'done';
+    it('Should deliver an order', async () => {
+      const body = new StockPickingDto();
+      body.sale_id = 1;
+      body.state = 'done';
 
-    const spyPush = jest
-      .spyOn(mockStellarService, 'pushTransaction')
-      .mockReturnValueOnce(null);
+      const spyPush = jest
+        .spyOn(mockStellarService, 'pushTransaction')
+        .mockReturnValueOnce(null);
 
-    await request(app.getHttpServer())
-      .post('/warehouse/deliver')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      await request(app.getHttpServer())
+        .post('/warehouse/order')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyPush).toBeCalledTimes(1);
-    expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
+      expect(spyPush).toBeCalledTimes(1);
+      expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
+    });
   });
 });

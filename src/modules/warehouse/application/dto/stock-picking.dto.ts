@@ -1,6 +1,8 @@
 import { IsInt } from 'class-validator';
 
-export class StockPickingDto {
+import { ProcessOrderDto } from './process-order.dto';
+
+export class StockPickingDto extends ProcessOrderDto {
   @IsInt()
   sale_id: number;
 }
