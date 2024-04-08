@@ -1,3 +1,5 @@
+import { OnModuleInit } from '@nestjs/common';
+
 import { MODEL, STATE } from '@/common/infrastructure/odoo/odoo.constants';
 
 export const ODOO_REPOSITORY = 'ODOO_REPOSITORY';
@@ -21,7 +23,7 @@ export interface IOdooOrderLine {
   quantity: number;
 }
 
-export interface IOdooRepository {
+export interface IOdooRepository extends OnModuleInit {
   createOdooAction(action: IOdooAction): Promise<IOdooActionIds>;
   getProductsForOrderLines(ids: number[]): Promise<IOdooOrderLine[]>;
   getOrderLinesForOrder(id: number): Promise<number[]>;

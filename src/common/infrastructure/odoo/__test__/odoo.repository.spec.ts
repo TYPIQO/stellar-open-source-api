@@ -3,6 +3,10 @@ import { Test } from '@nestjs/testing';
 import { config } from 'dotenv';
 
 import {
+  ERROR_CODES,
+  OdooError,
+} from '@/common/application/exceptions/odoo.error';
+import {
   IOdooRepository,
   ODOO_REPOSITORY,
 } from '@/common/application/repository/odoo.repository.interface';
@@ -51,6 +55,21 @@ describe('Odoo Repository', () => {
   afterEach(() => {
     jest.resetAllMocks();
     jest.restoreAllMocks();
+  });
+
+  describe('Odoo Repository - On module init', () => {
+    it('Should connect to odoo', async () => {
+      await odooRepository.onModuleInit();
+      expect(mockConnect).toHaveBeenCalled();
+    });
+
+    it('Should throw an Odoo error when connecting to odoo fails', async () => {
+      mockConnect.mockRejectedValueOnce(new Error());
+
+      await expect(odooRepository.onModuleInit()).rejects.toThrowError(
+        new OdooError(ERROR_CODES.CONNECT_ERROR),
+      );
+    });
   });
 
   describe('Odoo Repository - Get order lines for order', () => {
