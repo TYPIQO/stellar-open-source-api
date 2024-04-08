@@ -139,5 +139,18 @@ describe('Warehouse Controller', () => {
       expect(spyPush).toBeCalledTimes(1);
       expect(spyPush).toBeCalledWith(TRANSACTION_TYPE.DELIVER, body.sale_id);
     });
+
+    it('Should throw a BadRequestException if the dto is invalid', async () => {
+      const body = {
+        state: 'draft',
+      };
+
+      await request(app.getHttpServer())
+        .post('/warehouse/order')
+        .send(body)
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(mockStellarService.pushTransaction).not.toHaveBeenCalled();
+    });
   });
 });
