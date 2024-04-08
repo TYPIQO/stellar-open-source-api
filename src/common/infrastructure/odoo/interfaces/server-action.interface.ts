@@ -1,4 +1,4 @@
-import { MODEL } from '../services/odoo.constants';
+import { MODEL } from '../odoo.constants';
 
 export interface IServerAction {
   name: string;

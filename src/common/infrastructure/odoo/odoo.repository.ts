@@ -1,34 +1,31 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as Odoo from 'odoo-await';
 
-import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
-
-import { OrderLine } from '../../domain/order-line.domain';
-import { ERROR_CODES, OdooError } from '../exceptions/odoo.error';
-import { IAutomation } from '../interfaces/automation.interface';
-import { IField } from '../interfaces/field.interface';
-import { IModel } from '../interfaces/model.interface';
-import { IOrderLine } from '../interfaces/order-line.interface';
-import { ISaleOrder } from '../interfaces/sale-order.interface';
-import { IServerAction } from '../interfaces/server-action.interface';
 import {
-  IOdooActionRepository,
-  ODOO_ACTION_REPOSITORY,
-} from '../repository/odoo-action.repository.interface';
-import { ACTIONS, MODEL } from './odoo.constants';
+  ERROR_CODES,
+  OdooError,
+} from '@/common/application/exceptions/odoo.error';
+import {
+  IOdooAction,
+  IOdooActionIds,
+  IOdooOrderLine,
+  IOdooRepository,
+} from '@/common/application/repository/odoo.repository.interface';
+
+import { IAutomation } from './interfaces/automation.interface';
+import { IField } from './interfaces/field.interface';
+import { IModel } from './interfaces/model.interface';
+import { IOrderLine } from './interfaces/order-line.interface';
+import { ISaleOrder } from './interfaces/sale-order.interface';
+import { IServerAction } from './interfaces/server-action.interface';
+import { MODEL } from './odoo.constants';
 
 @Injectable()
-export class OdooService implements OnModuleInit {
+export class OdooRepository implements IOdooRepository, OnModuleInit {
   private odoo: Odoo;
-
-  constructor(
-    @Inject(ODOO_ACTION_REPOSITORY)
-    private readonly odooActionRepository: IOdooActionRepository,
-  ) {}
 
   async onModuleInit() {
     await this.connect();
-    await this.createCoreServerActions();
   }
 
   private async connect(): Promise<void> {
@@ -67,29 +64,6 @@ export class OdooService implements OnModuleInit {
     }));
   }
 
-  async getOrderLinesForOrder(id: number): Promise<number[]> {
-    const order = await this.odoo.searchRead<ISaleOrder>(
-      MODEL.SALE_ORDER,
-      [['id', '=', id]],
-      [],
-    );
-
-    return order[0].order_line;
-  }
-
-  async getProductsForOrderLines(ids: number[]): Promise<OrderLine[]> {
-    const rawOrderLines = await this.odoo.searchRead<IOrderLine>(
-      MODEL.ORDER_LINE,
-      [['id', 'in', ids]],
-      [],
-    );
-
-    return rawOrderLines.map((orderLine) => ({
-      productId: orderLine.product_id[0],
-      quantity: orderLine.product_uom_qty,
-    }));
-  }
-
   private async getModelAndFields(
     modelName: MODEL,
     fieldNames: string[],
@@ -107,11 +81,42 @@ export class OdooService implements OnModuleInit {
     return { model: model[0], fields: fields };
   }
 
-  private async createOdooAction(type: TRANSACTION_TYPE): Promise<void> {
-    const action = ACTIONS[type];
+  async getOrderLinesForOrder(id: number): Promise<number[]> {
+    const order = await this.odoo.searchRead<ISaleOrder>(
+      MODEL.SALE_ORDER,
+      [['id', '=', id]],
+      [],
+    );
+
+    return order[0].order_line;
+  }
+
+  async getProductsForOrderLines(ids: number[]): Promise<IOdooOrderLine[]> {
+    const rawOrderLines = await this.odoo.searchRead<IOrderLine>(
+      MODEL.ORDER_LINE,
+      [['id', 'in', ids]],
+      [],
+    );
+
+    return rawOrderLines.map((orderLine) => ({
+      productId: orderLine.product_id[0],
+      quantity: orderLine.product_uom_qty,
+    }));
+  }
+
+  async createOdooAction(action: IOdooAction): Promise<IOdooActionIds> {
+    const {
+      serverActionName,
+      automationName,
+      endpoint,
+      state,
+      modelName,
+      fieldNames,
+    } = action;
+
     const { model, fields } = await this.getModelAndFields(
-      action.fields.model,
-      action.fields.fields,
+      modelName,
+      fieldNames,
     );
 
     const fieldIds = fields.map((field) => field.id);
@@ -121,16 +126,16 @@ export class OdooService implements OnModuleInit {
       stateField.selection_ids,
     );
     const selectionId = stateSelections.find(
-      (selection) => selection.name === ACTIONS[type].state,
+      (selection) => selection.name === state,
     ).id;
 
     const serverAction: IServerAction = {
-      name: ACTIONS[type].serverAction,
+      name: serverActionName,
       model_id: model.id,
       binding_type: 'action',
       state: 'webhook',
       type: MODEL.SERVER_ACTION,
-      webhook_url: ACTIONS[type].endpoint,
+      webhook_url: endpoint,
       webhook_field_ids: fieldIds,
     };
 
@@ -140,7 +145,7 @@ export class OdooService implements OnModuleInit {
     );
 
     const automation: IAutomation = {
-      name: ACTIONS[type].automation,
+      name: automationName,
       model_id: model.id,
       active: true,
       trigger: 'on_state_set',
@@ -151,23 +156,9 @@ export class OdooService implements OnModuleInit {
 
     const automationId = await this.odoo.create(MODEL.AUTOMATION, automation);
 
-    await this.odooActionRepository.create({
-      type,
-      serverActionName: ACTIONS[type].serverAction,
+    return {
       serverActionId,
-      automationName: ACTIONS[type].automation,
       automationId,
-    });
-  }
-
-  async createCoreServerActions(): Promise<void> {
-    const actions = await this.odooActionRepository.getAll();
-    const expectedActions = Object.values(TRANSACTION_TYPE);
-    const missingActions = expectedActions.filter(
-      (action) => !actions.find((a) => a.type === action),
-    );
-    for (const action of missingActions) {
-      await this.createOdooAction(action);
-    }
+    };
   }
 }

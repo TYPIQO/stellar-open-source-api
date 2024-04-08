@@ -1,20 +1,20 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { join } from 'path';
+import { config } from 'dotenv';
 
-import { loadFixtures } from '@data/util/loader';
+import {
+  IOdooRepository,
+  ODOO_REPOSITORY,
+} from '@/common/application/repository/odoo.repository.interface';
+import { CommonModule } from '@/common/common.module';
 
-import { AppModule } from '@/app.module';
-import { STELLAR_REPOSITORY } from '@/common/application/repository/stellar.repository.interface';
-import { StellarService } from '@/modules/stellar/application/services/stellar.service';
+import { IField } from '../interfaces/field.interface';
+import { IModel } from '../interfaces/model.interface';
+import { IOrderLine } from '../interfaces/order-line.interface';
+import { ISaleOrder } from '../interfaces/sale-order.interface';
+import { MODEL, STATE } from '../odoo.constants';
 
-import { IField } from '../../interfaces/field.interface';
-import { IModel } from '../../interfaces/model.interface';
-import { IOrderLine } from '../../interfaces/order-line.interface';
-import { ISaleOrder } from '../../interfaces/sale-order.interface';
-import { MODEL } from '../odoo.constants';
-import { OdooService } from '../odoo.service';
-
+config();
 const mockConnect = jest.fn();
 const mockSearchRead = jest.fn();
 const mockCreate = jest.fn();
@@ -28,44 +28,18 @@ jest.mock(
     },
 );
 
-const mockStellarService = {
-  onModuleInit: jest.fn(),
-};
-
-describe('Odoo Service', () => {
+describe('Odoo Repository', () => {
   let app: INestApplication;
-  let odooService: OdooService;
+  let odooRepository: IOdooRepository;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(StellarService)
-      .useValue(mockStellarService)
-      .overrideProvider(STELLAR_REPOSITORY)
-      .useValue({})
-      .compile();
-
-    await loadFixtures(
-      `${__dirname}/fixtures`,
-      join(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        '..',
-        '..',
-        'configuration/orm.configuration.ts',
-      ),
-    );
+      imports: [CommonModule],
+    }).compile();
 
     app = moduleRef.createNestApplication();
 
-    odooService = moduleRef.get<OdooService>(OdooService);
-
-    jest
-      .spyOn(odooService, 'createCoreServerActions')
-      .mockResolvedValueOnce(undefined);
+    odooRepository = moduleRef.get<IOdooRepository>(ODOO_REPOSITORY);
 
     await app.init();
   });
@@ -79,24 +53,7 @@ describe('Odoo Service', () => {
     jest.restoreAllMocks();
   });
 
-  describe('Odoo Service - On module init', () => {
-    it('Should connect to the database and create core server actions', async () => {
-      const createActionsSpy = jest
-        .spyOn(odooService, 'createCoreServerActions')
-        .mockResolvedValueOnce(undefined);
-
-      await odooService.onModuleInit();
-      expect(mockConnect).toHaveBeenCalled();
-      expect(createActionsSpy).toHaveBeenCalled();
-    });
-
-    it('Should throw an error when connecting to the database fails', async () => {
-      mockConnect.mockRejectedValueOnce(new Error());
-      await expect(odooService.onModuleInit()).rejects.toThrowError();
-    });
-  });
-
-  describe('Odoo Service - Get order lines for order', () => {
+  describe('Odoo Repository - Get order lines for order', () => {
     it('Should get order lines for order', async () => {
       const mockSaleOrder: ISaleOrder = {
         order_line: [1, 2, 3],
@@ -106,12 +63,12 @@ describe('Odoo Service', () => {
         return [mockSaleOrder];
       });
 
-      const orderLines = await odooService.getOrderLinesForOrder(1);
+      const orderLines = await odooRepository.getOrderLinesForOrder(1);
       expect(orderLines).toEqual([1, 2, 3]);
     });
   });
 
-  describe('Odoo Service - Get products for order lines', () => {
+  describe('Odoo Repository - Get products for order lines', () => {
     it('Should get products for order lines', async () => {
       const mockOrderLines: IOrderLine[] = [
         {
@@ -128,7 +85,7 @@ describe('Odoo Service', () => {
         return mockOrderLines;
       });
 
-      const products = await odooService.getProductsForOrderLines([1, 2]);
+      const products = await odooRepository.getProductsForOrderLines([1, 2]);
       expect(products).toEqual([
         {
           productId: 1,
@@ -142,8 +99,17 @@ describe('Odoo Service', () => {
     });
   });
 
-  describe('Odoo Service - Create core server actions', () => {
-    it('Should create core server actions when they do not exist', async () => {
+  describe('Odoo Repository - Create core server actions', () => {
+    it('Should create core server actions', async () => {
+      const odooAction = {
+        serverActionName: 'test',
+        automationName: 'test',
+        endpoint: 'test',
+        state: STATE.DRAFT,
+        modelName: MODEL.STOCK_PICKING,
+        fieldNames: ['id', 'sale_id', 'partner_id', 'state'],
+      };
+
       const mockModel: IModel[] = [
         { id: 1, name: MODEL.STOCK_PICKING, model: MODEL.STOCK_PICKING },
       ];
@@ -191,31 +157,31 @@ describe('Odoo Service', () => {
         return 1;
       });
 
-      await odooService.createCoreServerActions();
+      await odooRepository.createOdooAction(odooAction);
 
       const createServerActionFn = mockCreate.mock.calls[0];
       const createAutomationFn = mockCreate.mock.calls[1];
 
       expect(createServerActionFn[0]).toEqual(MODEL.SERVER_ACTION);
       expect(createServerActionFn[1]).toEqual({
-        name: expect.any(String),
+        name: odooAction.serverActionName,
         model_id: mockModel[0].id,
         binding_type: 'action',
         state: 'webhook',
         type: MODEL.SERVER_ACTION,
-        webhook_url: expect.any(String),
-        webhook_field_ids: expect.any(Array),
+        webhook_url: odooAction.endpoint,
+        webhook_field_ids: [1, 2, 3, 4],
       });
 
       expect(createAutomationFn[0]).toEqual(MODEL.AUTOMATION);
       expect(createAutomationFn[1]).toEqual({
-        name: expect.any(String),
+        name: odooAction.automationName,
         model_id: mockModel[0].id,
         active: true,
         trigger: 'on_state_set',
-        action_server_ids: expect.any(Array),
-        trigger_field_ids: expect.any(Array),
-        trg_selection_field_id: mockFields[3].selection_ids[2],
+        action_server_ids: [1],
+        trigger_field_ids: [4],
+        trg_selection_field_id: mockFields[3].selection_ids[0],
       });
     });
   });
