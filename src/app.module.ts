@@ -9,8 +9,9 @@ import { datasourceOptions } from '@configuration/orm.configuration';
 
 import { CommonModule } from '@common/common.module';
 
-import { OdooModule } from './modules/odoo/odoo.module';
+import { ActionModule } from './modules/action/action.module';
 import { StellarModule } from './modules/stellar/stellar.module';
+import { WarehouseModule } from './modules/warehouse/warehouse.module';
 
 @Module({
   imports: [
@@ -29,8 +30,9 @@ import { StellarModule } from './modules/stellar/stellar.module';
       },
     }),
     CommonModule,
-    OdooModule,
+    ActionModule,
     StellarModule,
+    WarehouseModule,
   ],
   controllers: [],
   providers: [],
