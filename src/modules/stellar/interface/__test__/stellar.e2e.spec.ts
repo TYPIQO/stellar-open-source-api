@@ -1,13 +1,13 @@
 import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { join } from 'path';
 import {
   FeeBumpTransaction,
   Horizon,
   Keypair,
   Networks,
   Transaction,
-} from 'stellar-sdk';
+} from '@stellar/stellar-sdk';
+import { join } from 'path';
 import * as request from 'supertest';
 
 import { loadFixtures } from '@data/util/loader';
