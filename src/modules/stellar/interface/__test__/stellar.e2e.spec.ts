@@ -48,9 +48,6 @@ const keypairs = {
 
 process.env.STELLAR_NETWORK = 'testnet';
 process.env.STELLAR_ISSUER_SECRET_KEY = keypairs.issuer.secret();
-process.env.STELLAR_DISTRIBUTOR_SECRET_KEY = keypairs.distributor.secret();
-process.env.STELLAR_CONFIRM_SECRET_KEY = keypairs.confirm.secret();
-process.env.STELLAR_CONSOLIDATE_SECRET_KEY = keypairs.consolidate.secret();
 
 const mockSubmittedTransaction = {
   hash: 'hash',

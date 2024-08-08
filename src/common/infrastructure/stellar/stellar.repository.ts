@@ -44,15 +44,6 @@ export class StellarRepository implements IStellarRepository {
     this.issuerKeypair = Keypair.fromSecret(
       process.env.STELLAR_ISSUER_SECRET_KEY,
     );
-    this.distributorKeypair = Keypair.fromSecret(
-      process.env.STELLAR_DISTRIBUTOR_SECRET_KEY,
-    );
-    this.confirmKeypair = Keypair.fromSecret(
-      process.env.STELLAR_CONFIRM_SECRET_KEY,
-    );
-    this.consolidateKeypair = Keypair.fromSecret(
-      process.env.STELLAR_CONSOLIDATE_SECRET_KEY,
-    );
   }
 
   private createFeeBumpTransaction(innerTx: Transaction): FeeBumpTransaction {
