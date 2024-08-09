@@ -40,10 +40,10 @@ export class StellarRepository implements IStellarRepository {
 
   private issuerKeypair: Keypair;
 
-  private createPublicKey: string;
-  private confirmPublicKey: string;
-  private consolidatePublicKey: string;
-  private deliverPublicKey: string;
+  private createNode: MuxedAccount;
+  private confirmNode: MuxedAccount;
+  private consolidateNode: MuxedAccount;
+  private deliverNode: MuxedAccount;
 
   constructor(private readonly stellarConfig: StellarConfig) {
     this.server = this.stellarConfig.server;
@@ -93,22 +93,22 @@ export class StellarRepository implements IStellarRepository {
   }
 
   private createMuxedAccounts(sourceAccount: Horizon.AccountResponse): void {
-    this.createPublicKey = new MuxedAccount(
+    this.createNode = new MuxedAccount(
       sourceAccount,
       TRACEABILITY_NODES.CREATE,
-    ).accountId();
-    this.confirmPublicKey = new MuxedAccount(
+    );
+    this.confirmNode = new MuxedAccount(
       sourceAccount,
       TRACEABILITY_NODES.CONFIRM,
-    ).accountId();
-    this.consolidatePublicKey = new MuxedAccount(
+    );
+    this.consolidateNode = new MuxedAccount(
       sourceAccount,
       TRACEABILITY_NODES.CONSOLIDATE,
-    ).accountId();
-    this.deliverPublicKey = new MuxedAccount(
+    );
+    this.deliverNode = new MuxedAccount(
       sourceAccount,
       TRACEABILITY_NODES.DELIVER,
-    ).accountId();
+    );
   }
 
   private async doPayment(
@@ -163,7 +163,7 @@ export class StellarRepository implements IStellarRepository {
     try {
       return await this.doPayment(
         this.issuerKeypair.publicKey(),
-        this.createPublicKey,
+        this.createNode.accountId(),
         amounts,
       );
     } catch {
@@ -174,8 +174,8 @@ export class StellarRepository implements IStellarRepository {
   async confirmOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
       return await this.doPayment(
-        this.createPublicKey,
-        this.confirmPublicKey,
+        this.createNode.accountId(),
+        this.confirmNode.accountId(),
         amounts,
       );
     } catch {
@@ -188,8 +188,8 @@ export class StellarRepository implements IStellarRepository {
   ): Promise<ISubmittedTransaction> {
     try {
       return await this.doPayment(
-        this.confirmPublicKey,
-        this.consolidatePublicKey,
+        this.confirmNode.accountId(),
+        this.consolidateNode.accountId(),
         amounts,
       );
     } catch {
@@ -200,8 +200,8 @@ export class StellarRepository implements IStellarRepository {
   async deliverOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
       return await this.doPayment(
-        this.consolidatePublicKey,
-        this.deliverPublicKey,
+        this.consolidateNode.accountId(),
+        this.deliverNode.accountId(),
         amounts,
       );
     } catch {
