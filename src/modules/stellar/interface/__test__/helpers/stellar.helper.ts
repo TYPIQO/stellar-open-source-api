@@ -1,5 +1,5 @@
-import { Asset, Horizon, Operation } from 'stellar-sdk';
-import { HorizonApi } from 'stellar-sdk/lib/horizon';
+import { Asset, Horizon, Operation } from '@stellar/stellar-sdk';
+import { HorizonApi } from '@stellar/stellar-sdk/lib/horizon';
 
 import { IAssetAmount } from '@/common/application/repository/stellar.repository.interface';
 

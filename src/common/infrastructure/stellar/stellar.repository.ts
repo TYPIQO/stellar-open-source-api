@@ -11,8 +11,8 @@ import {
   Operation,
   Transaction,
   TransactionBuilder,
-} from 'stellar-sdk';
-import { HorizonApi } from 'stellar-sdk/lib/horizon';
+} from '@stellar/stellar-sdk';
+import { HorizonApi } from '@stellar/stellar-sdk/lib/horizon';
 
 import { StellarConfig } from '@/configuration/stellar.configuration';
 

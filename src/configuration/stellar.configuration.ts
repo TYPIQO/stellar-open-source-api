@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Horizon, Networks } from 'stellar-sdk';
+import { Horizon, Networks } from '@stellar/stellar-sdk';
 
 export enum StellarNetwork {
   TESTNET = 'testnet',
