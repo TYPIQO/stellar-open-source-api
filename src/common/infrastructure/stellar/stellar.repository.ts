@@ -120,43 +120,30 @@ export class StellarRepository implements IStellarRepository {
       this.issuerKeypair.publicKey(),
     );
 
-    try {
-      const builder = new TransactionBuilder(issuerAccount, {
-        fee: this.TRANSACTION_MAX_FEE,
-        networkPassphrase: this.networkPassphrase,
-      });
+    const builder = new TransactionBuilder(issuerAccount, {
+      fee: this.TRANSACTION_MAX_FEE,
+      networkPassphrase: this.networkPassphrase,
+    });
 
-      amounts.forEach(({ assetCode, quantity }) => {
-        const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
+    amounts.forEach(({ assetCode, quantity }) => {
+      const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
 
-        builder.addOperation(
-          Operation.payment({
-            amount: quantity,
-            asset,
-            source,
-            destination,
-          }),
-        );
-      });
+      builder.addOperation(
+        Operation.payment({
+          amount: quantity,
+          asset,
+          source,
+          destination,
+        }),
+      );
+    });
 
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair);
+    const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+    tx.sign(this.issuerKeypair);
 
-      return (await this.server.submitTransaction(
-        tx,
-      )) as unknown as ISubmittedTransaction;
-    } catch (error) {
-      const isTimeoutError = error.response?.data?.status === 504;
-      const isInsufficientFeeError =
-        error.response?.data?.extras?.result_codes?.transaction ===
-        'tx_insufficient_fee';
-
-      if (isTimeoutError || isInsufficientFeeError) {
-        return await this.doPayment(source, destination, amounts);
-      }
-
-      throw error;
-    }
+    return (await this.server.submitTransaction(
+      tx,
+    )) as unknown as ISubmittedTransaction;
   }
 
   async configureIssuerAccount(): Promise<void> {
