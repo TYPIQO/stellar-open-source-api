@@ -3,4 +3,5 @@ export enum TRACEABILITY_NODES {
   CONFIRM = '2',
   CONSOLIDATE = '3',
   DELIVER = '4',
+  CANCEL = '5',
 }
