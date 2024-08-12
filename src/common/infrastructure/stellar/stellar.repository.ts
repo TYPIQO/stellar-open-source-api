@@ -4,15 +4,13 @@ import {
   AuthClawbackEnabledFlag,
   AuthRequiredFlag,
   AuthRevocableFlag,
-  FeeBumpTransaction,
   Horizon,
   Keypair,
+  MuxedAccount,
   Networks,
   Operation,
-  Transaction,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
-import { HorizonApi } from '@stellar/stellar-sdk/lib/horizon';
 
 import { StellarConfig } from '@/configuration/stellar.configuration';
 
@@ -26,17 +24,26 @@ import {
   ISubmittedTransaction,
 } from '../../application/repository/stellar.repository.interface';
 
+enum TRACEABILITY_NODES {
+  CREATE = '1',
+  CONFIRM = '2',
+  CONSOLIDATE = '3',
+  DELIVER = '4',
+}
+
 @Injectable()
 export class StellarRepository implements IStellarRepository {
   private readonly TRANSACTION_TIMEOUT = 30;
-  private readonly TRANSACTION_MAX_FEE = '1000';
+  private readonly TRANSACTION_MAX_FEE = '10000';
   private readonly server: Horizon.Server;
   private readonly networkPassphrase: Networks;
 
   private issuerKeypair: Keypair;
-  private distributorKeypair: Keypair;
-  private confirmKeypair: Keypair;
-  private consolidateKeypair: Keypair;
+
+  private createNode: MuxedAccount;
+  private confirmNode: MuxedAccount;
+  private consolidateNode: MuxedAccount;
+  private deliverNode: MuxedAccount;
 
   constructor(private readonly stellarConfig: StellarConfig) {
     this.server = this.stellarConfig.server;
@@ -44,33 +51,22 @@ export class StellarRepository implements IStellarRepository {
     this.issuerKeypair = Keypair.fromSecret(
       process.env.STELLAR_ISSUER_SECRET_KEY,
     );
-    this.distributorKeypair = Keypair.fromSecret(
-      process.env.STELLAR_DISTRIBUTOR_SECRET_KEY,
-    );
-    this.confirmKeypair = Keypair.fromSecret(
-      process.env.STELLAR_CONFIRM_SECRET_KEY,
-    );
-    this.consolidateKeypair = Keypair.fromSecret(
-      process.env.STELLAR_CONSOLIDATE_SECRET_KEY,
-    );
   }
 
-  private createFeeBumpTransaction(innerTx: Transaction): FeeBumpTransaction {
-    const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-      this.issuerKeypair.publicKey(),
-      this.TRANSACTION_MAX_FEE,
-      innerTx,
-      this.networkPassphrase,
-    );
-    feeBumpTx.sign(this.issuerKeypair);
-    console.log(feeBumpTx.toXDR());
-    return feeBumpTx;
-  }
-
-  private createSetAccountFlagsTransaction(
+  private async setFlags(
+    sourceKeypair: Keypair,
     sourceAccount: Horizon.AccountResponse,
-  ): Transaction {
-    return new TransactionBuilder(sourceAccount, {
+  ): Promise<void> {
+    const { auth_clawback_enabled, auth_required, auth_revocable } =
+      sourceAccount.flags;
+    const isAlreadyConfigured =
+      auth_clawback_enabled && auth_required && auth_revocable;
+
+    if (isAlreadyConfigured) {
+      return;
+    }
+
+    const setFlagsTx = new TransactionBuilder(sourceAccount, {
       fee: this.TRANSACTION_MAX_FEE,
       networkPassphrase: this.networkPassphrase,
     })
@@ -91,125 +87,63 @@ export class StellarRepository implements IStellarRepository {
       )
       .setTimeout(this.TRANSACTION_TIMEOUT)
       .build();
+
+    setFlagsTx.sign(sourceKeypair);
+    await this.server.submitTransaction(setFlagsTx);
   }
 
-  private addTrustorOperation(
-    builder: TransactionBuilder,
-    asset: Asset,
-    trustor: Keypair,
-  ): void {
-    builder
-      .addOperation(
-        Operation.changeTrust({
-          asset,
-          source: trustor.publicKey(),
-        }),
-      )
-      .addOperation(
-        Operation.setTrustLineFlags({
-          asset,
-          flags: {
-            authorized: true,
-          },
-          trustor: trustor.publicKey(),
-          source: this.issuerKeypair.publicKey(),
-        }),
-      );
+  private createMuxedAccounts(sourceAccount: Horizon.AccountResponse): void {
+    this.createNode = new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.CREATE,
+    );
+    this.confirmNode = new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.CONFIRM,
+    );
+    this.consolidateNode = new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.CONSOLIDATE,
+    );
+    this.deliverNode = new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.DELIVER,
+    );
   }
 
-  private addPaymentOperations(
-    builder: TransactionBuilder,
+  private async doPayment(
+    source: string,
+    destination: string,
     amounts: IAssetAmount[],
-    source: Keypair,
-    destination: Keypair,
-  ): void {
-    const sourcePublicKey = source.publicKey();
-    const destinationPublicKey = destination.publicKey();
+  ): Promise<ISubmittedTransaction> {
+    const issuerAccount = await this.server.loadAccount(
+      this.issuerKeypair.publicKey(),
+    );
 
-    const addTrustorOperations =
-      destination.publicKey() !== this.issuerKeypair.publicKey();
+    const builder = new TransactionBuilder(issuerAccount, {
+      fee: this.TRANSACTION_MAX_FEE,
+      networkPassphrase: this.networkPassphrase,
+    });
 
     amounts.forEach(({ assetCode, quantity }) => {
       const asset = new Asset(assetCode, this.issuerKeypair.publicKey());
-
-      if (addTrustorOperations) {
-        this.addTrustorOperation(builder, asset, destination);
-      }
 
       builder.addOperation(
         Operation.payment({
           amount: quantity,
           asset,
-          source: sourcePublicKey,
-          destination: destinationPublicKey,
+          source,
+          destination,
         }),
       );
     });
-  }
 
-  private addClearBalanceOperations(
-    builder: TransactionBuilder,
-    sourceAccount: Horizon.AccountResponse,
-    amounts: IAssetAmount[],
-  ): void {
-    const balancesToClear: HorizonApi.BalanceLineAsset<'credit_alphanum12'>[] =
-      [];
+    const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
+    tx.sign(this.issuerKeypair);
 
-    for (const { assetCode, quantity } of amounts) {
-      const balance = sourceAccount.balances.find(
-        (balance) =>
-          balance.asset_type === 'credit_alphanum12' &&
-          balance.asset_code === assetCode,
-      );
-
-      if (balance && balance.asset_type === 'credit_alphanum12') {
-        if (parseFloat(balance.balance) === parseFloat(quantity)) {
-          balancesToClear.push(balance);
-        }
-      }
-    }
-
-    for (const balance of balancesToClear) {
-      builder.addOperation(
-        Operation.changeTrust({
-          asset: new Asset(balance.asset_code, balance.asset_issuer),
-          limit: '0',
-          source: sourceAccount.account_id,
-        }),
-      );
-    }
-  }
-
-  private async submitFeeBumpTransaction(
-    transaction: Transaction,
-  ): Promise<ISubmittedTransaction> {
-    const feeBumpTx = this.createFeeBumpTransaction(transaction);
     return (await this.server.submitTransaction(
-      feeBumpTx,
+      tx,
     )) as unknown as ISubmittedTransaction;
-  }
-
-  private async createPayments(
-    amounts: IAssetAmount[],
-    source: Keypair,
-    destination: Keypair,
-  ): Promise<TransactionBuilder> {
-    const sourceAccount = await this.server.loadAccount(source.publicKey());
-
-    const builder = new TransactionBuilder(sourceAccount, {
-      fee: this.TRANSACTION_MAX_FEE,
-      networkPassphrase: this.networkPassphrase,
-    });
-
-    this.addPaymentOperations(builder, amounts, source, destination);
-
-    const clearBalances = source.publicKey() !== this.issuerKeypair.publicKey();
-
-    if (clearBalances) {
-      this.addClearBalanceOperations(builder, sourceAccount, amounts);
-    }
-
-    return builder;
   }
 
   async configureIssuerAccount(): Promise<void> {
@@ -218,18 +152,8 @@ export class StellarRepository implements IStellarRepository {
         this.issuerKeypair.publicKey(),
       );
 
-      const { auth_clawback_enabled, auth_required, auth_revocable } =
-        issuerAccount.flags;
-      const isAlreadyConfigured =
-        auth_clawback_enabled && auth_required && auth_revocable;
-
-      if (isAlreadyConfigured) {
-        return;
-      }
-
-      const setFlagsTx = this.createSetAccountFlagsTransaction(issuerAccount);
-      setFlagsTx.sign(this.issuerKeypair);
-      await this.server.submitTransaction(setFlagsTx);
+      this.createMuxedAccounts(issuerAccount);
+      await this.setFlags(this.issuerKeypair, issuerAccount);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIG_ISSUER_ACCOUNT_ERROR);
     }
@@ -237,15 +161,11 @@ export class StellarRepository implements IStellarRepository {
 
   async createOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.doPayment(
+        this.issuerKeypair.publicKey(),
+        this.createNode.accountId(),
         amounts,
-        this.issuerKeypair,
-        this.distributorKeypair,
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.distributorKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CREATE_ORDER_ERROR);
     }
@@ -253,15 +173,11 @@ export class StellarRepository implements IStellarRepository {
 
   async confirmOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.doPayment(
+        this.createNode.accountId(),
+        this.confirmNode.accountId(),
         amounts,
-        this.distributorKeypair,
-        this.confirmKeypair,
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.distributorKeypair, this.confirmKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONFIRM_ORDER_ERROR);
     }
@@ -271,15 +187,11 @@ export class StellarRepository implements IStellarRepository {
     amounts: IAssetAmount[],
   ): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.doPayment(
+        this.confirmNode.accountId(),
+        this.consolidateNode.accountId(),
         amounts,
-        this.confirmKeypair,
-        this.consolidateKeypair,
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.issuerKeypair, this.confirmKeypair, this.consolidateKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.CONSOLIDATE_ORDER_ERROR);
     }
@@ -287,15 +199,11 @@ export class StellarRepository implements IStellarRepository {
 
   async deliverOrder(amounts: IAssetAmount[]): Promise<ISubmittedTransaction> {
     try {
-      const builder = await this.createPayments(
+      return await this.doPayment(
+        this.consolidateNode.accountId(),
+        this.deliverNode.accountId(),
         amounts,
-        this.consolidateKeypair,
-        this.issuerKeypair,
       );
-
-      const tx = builder.setTimeout(this.TRANSACTION_TIMEOUT).build();
-      tx.sign(this.consolidateKeypair);
-      return await this.submitFeeBumpTransaction(tx);
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
     }

@@ -1,12 +1,7 @@
 import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-  FeeBumpTransaction,
-  Horizon,
-  Keypair,
-  Networks,
-  Transaction,
-} from '@stellar/stellar-sdk';
+import { Horizon, Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
+
 import { join } from 'path';
 import * as request from 'supertest';
 
@@ -23,12 +18,9 @@ import {
 
 import { StellarService } from '../../application/services/stellar.service';
 import {
-  createBalances,
   createMockAccount,
-  hasClearBalanceOperation,
   hasPaymentOperation,
   hasSetFlagsOperation,
-  hasTrustorOperation,
   transformOrderLinesToAssetAmounts,
 } from './helpers/stellar.helper';
 
@@ -39,18 +31,23 @@ jest.mock('queue', () => ({
   })),
 }));
 
-const keypairs = {
-  issuer: Keypair.random(),
-  distributor: Keypair.random(),
-  confirm: Keypair.random(),
-  consolidate: Keypair.random(),
+const issuerKeypair = Keypair.fromSecret(
+  'SAJOLMA4GOIY5IQI565GG6ULQE6PU5USSKVMTIMSTI7JABHHBR7O34Q7',
+);
+
+const muxedAccounts = {
+  create:
+    'MCUR4DO6VOJO5NBMYTT4DSSVXA3X42TYWROMGPF3Q5RNTH5N7JXEQAAAAAAAAAAAAERSA',
+  confirm:
+    'MCUR4DO6VOJO5NBMYTT4DSSVXA3X42TYWROMGPF3Q5RNTH5N7JXEQAAAAAAAAAAAAJABA',
+  consolidate:
+    'MCUR4DO6VOJO5NBMYTT4DSSVXA3X42TYWROMGPF3Q5RNTH5N7JXEQAAAAAAAAAAAANQQA',
+  deliver:
+    'MCUR4DO6VOJO5NBMYTT4DSSVXA3X42TYWROMGPF3Q5RNTH5N7JXEQAAAAAAAAAAAASDHA',
 };
 
 process.env.STELLAR_NETWORK = 'testnet';
-process.env.STELLAR_ISSUER_SECRET_KEY = keypairs.issuer.secret();
-process.env.STELLAR_DISTRIBUTOR_SECRET_KEY = keypairs.distributor.secret();
-process.env.STELLAR_CONFIRM_SECRET_KEY = keypairs.confirm.secret();
-process.env.STELLAR_CONSOLIDATE_SECRET_KEY = keypairs.consolidate.secret();
+process.env.STELLAR_ISSUER_SECRET_KEY = issuerKeypair.secret();
 
 const mockSubmittedTransaction = {
   hash: 'hash',
@@ -147,7 +144,7 @@ describe('Stellar Module', () => {
 
   describe('Stellar Service - On module init', () => {
     it('Should configure the issuer account if it is not configured', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
         .mockResolvedValueOnce(mockIssuerAccount);
@@ -163,7 +160,7 @@ describe('Stellar Module', () => {
 
     it('Should not configure the issuer account if it is already configured', async () => {
       const mockIssuerAccount = createMockAccount(
-        keypairs.issuer.publicKey(),
+        issuerKeypair.publicKey(),
         true,
       );
       jest
@@ -179,7 +176,7 @@ describe('Stellar Module', () => {
     });
 
     it('Should throw an error if there is an error in the Stellar transaction', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
         .mockResolvedValueOnce(mockIssuerAccount);
@@ -201,7 +198,7 @@ describe('Stellar Module', () => {
   describe('Stellar Service - Execute transaction', () => {
     it('Should create an order', async () => {
       const amounts = transformOrderLinesToAssetAmounts(mockOrderLines);
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
 
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
@@ -219,46 +216,29 @@ describe('Stellar Module', () => {
         mockOrderLineIds,
       );
 
-      const submittedTransaction = serverSpy.mock
-        .calls[0][0] as FeeBumpTransaction;
-
-      const {
-        innerTransaction: { operations },
-      } = submittedTransaction;
+      const { operations } = serverSpy.mock.calls[0][0] as Transaction;
 
       expect(response).toBe(mockSubmittedTransaction.hash);
       expect(
         hasPaymentOperation(
           operations,
           amounts,
-          keypairs.issuer.publicKey(),
-          keypairs.distributor.publicKey(),
-        ),
-      ).toBe(true);
-      expect(
-        hasTrustorOperation(
-          operations,
-          keypairs.distributor.publicKey(),
-          amounts.map((amount) => amount.assetCode),
+          issuerKeypair.publicKey(),
+          muxedAccounts.create,
         ),
       ).toBe(true);
     });
 
-    it('Should confirm an order and clear the distributor empty balances', async () => {
+    it('Should confirm an order', async () => {
       const amounts = transformOrderLinesToAssetAmounts(mockOrderLines);
-
-      const mockDistributorAccount = createMockAccount(
-        keypairs.distributor.publicKey(),
-        false,
-        createBalances(amounts, keypairs.issuer.publicKey()),
-      );
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
 
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
-        .mockResolvedValueOnce(mockDistributorAccount);
+        .mockResolvedValueOnce(mockIssuerAccount);
       const serverSpy = jest
         .spyOn(stellarConfig.server, 'submitTransaction')
         .mockResolvedValueOnce(mockSubmittedTransaction as any);
@@ -269,45 +249,22 @@ describe('Stellar Module', () => {
         mockOrderLineIds,
       );
 
-      const submittedTransaction = serverSpy.mock
-        .calls[0][0] as FeeBumpTransaction;
-
-      const {
-        innerTransaction: { operations },
-      } = submittedTransaction;
+      const { operations } = serverSpy.mock.calls[0][0] as Transaction;
 
       expect(response).toBe(mockSubmittedTransaction.hash);
       expect(
         hasPaymentOperation(
           operations,
           amounts,
-          keypairs.distributor.publicKey(),
-          keypairs.confirm.publicKey(),
-        ),
-      ).toBe(true);
-      expect(
-        hasTrustorOperation(
-          operations,
-          keypairs.confirm.publicKey(),
-          amounts.map((amount) => amount.assetCode),
-        ),
-      ).toBe(true);
-      expect(
-        hasClearBalanceOperation(
-          operations,
-          amounts.map((amount) => amount.assetCode),
+          muxedAccounts.create,
+          muxedAccounts.confirm,
         ),
       ).toBe(true);
     });
 
-    it('Should consolidate an order and clear the confirm empty balances', async () => {
+    it('Should consolidate an order', async () => {
       const amounts = transformOrderLinesToAssetAmounts(mockOrderLines);
-
-      const mockConfirmAccount = createMockAccount(
-        keypairs.distributor.publicKey(),
-        false,
-        createBalances([amounts[0]], keypairs.issuer.publicKey()),
-      );
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
 
       jest
         .spyOn(mockOdooService, 'getOrderLinesForOrder')
@@ -317,7 +274,7 @@ describe('Stellar Module', () => {
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
-        .mockResolvedValueOnce(mockConfirmAccount);
+        .mockResolvedValueOnce(mockIssuerAccount);
       const serverSpy = jest
         .spyOn(stellarConfig.server, 'submitTransaction')
         .mockResolvedValueOnce(mockSubmittedTransaction as any);
@@ -327,42 +284,22 @@ describe('Stellar Module', () => {
         confirmedOrderId,
       );
 
-      const submittedTransaction = serverSpy.mock
-        .calls[0][0] as FeeBumpTransaction;
-
-      const {
-        innerTransaction: { operations },
-      } = submittedTransaction;
+      const { operations } = serverSpy.mock.calls[0][0] as Transaction;
 
       expect(response).toBe(mockSubmittedTransaction.hash);
       expect(
         hasPaymentOperation(
           operations,
           amounts,
-          keypairs.confirm.publicKey(),
-          keypairs.consolidate.publicKey(),
+          muxedAccounts.confirm,
+          muxedAccounts.consolidate,
         ),
       ).toBe(true);
-      expect(
-        hasTrustorOperation(
-          operations,
-          keypairs.consolidate.publicKey(),
-          amounts.map((amount) => amount.assetCode),
-        ),
-      ).toBe(true);
-      expect(hasClearBalanceOperation(operations, [amounts[0].assetCode])).toBe(
-        true,
-      );
     });
 
-    it('Should deliver an order and clear the consolidate empty balances', async () => {
+    it('Should deliver an order', async () => {
       const amounts = transformOrderLinesToAssetAmounts(mockOrderLines);
-
-      const mockConsolidateAccount = createMockAccount(
-        keypairs.distributor.publicKey(),
-        false,
-        createBalances(amounts, keypairs.issuer.publicKey()),
-      );
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
 
       jest
         .spyOn(mockOdooService, 'getOrderLinesForOrder')
@@ -372,7 +309,7 @@ describe('Stellar Module', () => {
         .mockResolvedValue(mockOrderLines);
       jest
         .spyOn(stellarConfig.server, 'loadAccount')
-        .mockResolvedValueOnce(mockConsolidateAccount);
+        .mockResolvedValueOnce(mockIssuerAccount);
       const serverSpy = jest
         .spyOn(stellarConfig.server, 'submitTransaction')
         .mockResolvedValueOnce(mockSubmittedTransaction as any);
@@ -382,39 +319,21 @@ describe('Stellar Module', () => {
         consolidatedOrderId,
       );
 
-      const submittedTransaction = serverSpy.mock
-        .calls[0][0] as FeeBumpTransaction;
-
-      const {
-        innerTransaction: { operations },
-      } = submittedTransaction;
+      const { operations } = serverSpy.mock.calls[0][0] as Transaction;
 
       expect(response).toBe(mockSubmittedTransaction.hash);
       expect(
         hasPaymentOperation(
           operations,
           amounts,
-          keypairs.consolidate.publicKey(),
-          keypairs.issuer.publicKey(),
-        ),
-      ).toBe(true);
-      expect(
-        hasTrustorOperation(
-          operations,
-          keypairs.issuer.publicKey(),
-          amounts.map((amount) => amount.assetCode),
-        ),
-      ).toBe(false);
-      expect(
-        hasClearBalanceOperation(
-          operations,
-          amounts.map((amount) => amount.assetCode),
+          muxedAccounts.consolidate,
+          muxedAccounts.deliver,
         ),
       ).toBe(true);
     });
 
     it('Should persist a failed transaction when a create transaction fails', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       const mockOrderId = getOrderId();
 
       jest
@@ -452,7 +371,7 @@ describe('Stellar Module', () => {
     });
 
     it('Should persist a failed transaction when a confirm transaction fails', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       const mockOrderId = createdOrderToFailId;
 
       jest
@@ -486,7 +405,7 @@ describe('Stellar Module', () => {
     });
 
     it('Should persist a failed transaction when a consolidate transaction fails', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       const mockOrderId = confirmedOrderToFailId;
 
       jest
@@ -520,7 +439,7 @@ describe('Stellar Module', () => {
     });
 
     it('Should persist a failed transaction when a deliver transaction fails', async () => {
-      const mockIssuerAccount = createMockAccount(keypairs.issuer.publicKey());
+      const mockIssuerAccount = createMockAccount(issuerKeypair.publicKey());
       const mockOrderId = consolidatedOrderToFailId;
 
       jest
