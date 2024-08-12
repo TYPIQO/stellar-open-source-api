@@ -32,6 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Start Stellar Server
+        run: docker compose up -d stellar --build
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:

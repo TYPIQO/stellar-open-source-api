@@ -161,8 +161,7 @@ export class StellarService implements OnModuleInit {
       });
 
       return transaction.hash;
-    } catch (error) {
-      console.log(error);
+    } catch {
       await this.stellarTransactionRepository.create({
         orderId,
         type,

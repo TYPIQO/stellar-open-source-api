@@ -23,13 +23,7 @@ import {
   IStellarRepository,
   ISubmittedTransaction,
 } from '../../application/repository/stellar.repository.interface';
-
-enum TRACEABILITY_NODES {
-  CREATE = '1',
-  CONFIRM = '2',
-  CONSOLIDATE = '3',
-  DELIVER = '4',
-}
+import { TRACEABILITY_NODES } from './nodes.enum';
 
 @Injectable()
 export class StellarRepository implements IStellarRepository {

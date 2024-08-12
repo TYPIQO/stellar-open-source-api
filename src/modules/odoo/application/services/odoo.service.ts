@@ -25,8 +25,7 @@ export class OdooService implements OnModuleInit {
       });
 
       await this.odoo.connect();
-    } catch (error) {
-      console.log(error);
+    } catch {
       throw new OdooError(ERROR_CODES.CONNECT_ERROR);
     }
   }
