@@ -69,10 +69,33 @@ export class StellarService implements OnModuleInit {
     return amounts;
   }
 
+  private validateCancelTransaction(
+    transactions: StellarTransaction[],
+  ): boolean {
+    if (transactions.length === 0) {
+      return false;
+    }
+
+    const prevTransaction = transactions[transactions.length - 1];
+
+    if (
+      !prevTransaction.hash ||
+      prevTransaction.type === TRANSACTION_TYPE.CANCEL
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
   private validateTransaction(
     type: TRANSACTION_TYPE,
     transactions: StellarTransaction[],
   ): boolean {
+    if (type === TRANSACTION_TYPE.CANCEL) {
+      return this.validateCancelTransaction(transactions);
+    }
+
     const validationMap = {
       [TRANSACTION_TYPE.CREATE]: {
         length: 0,
@@ -150,6 +173,11 @@ export class StellarService implements OnModuleInit {
           break;
         case TRANSACTION_TYPE.DELIVER:
           transaction = await this.stellarRepository.deliverOrder(amounts);
+          break;
+        case TRANSACTION_TYPE.CANCEL:
+          transaction = await this.stellarRepository.cancelOrder(
+            transactions[transactions.length - 1].hash,
+          );
           break;
       }
 
