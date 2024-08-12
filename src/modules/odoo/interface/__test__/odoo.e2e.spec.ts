@@ -47,6 +47,10 @@ let mockOrderId = 0;
 const createdOrderId = 1111;
 const confirmedOrderId = 2222;
 const consolidatedOrderId = 3333;
+const failedOrderId = 4444;
+const createdOrderToFailId = 5555;
+const confirmedOrderToFailId = 6666;
+const consolidatedOrderToFailId = 7777;
 
 describe('Odoo Module', () => {
   let app: INestApplication;
@@ -154,191 +158,440 @@ describe('Odoo Module', () => {
     });
   });
 
-  it('POST /odoo/create - Should create an order and trace the transaction', async () => {
-    const orderId = getOrderId();
-    const body = new CreateOrderDto();
-    body.id = orderId;
-    body.order_line = mockOrderLineIds;
-    body.state = 'draft';
+  describe('POST /odoo/create', () => {
+    let orderId: number;
+    let body: CreateOrderDto;
 
-    const spyExecute = jest.spyOn(stellarService, 'executeTransaction');
-    const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
-    jest
-      .spyOn(mockOdooService, 'getProductsForOrderLines')
-      .mockResolvedValue(mockOrderLines);
+    beforeEach(() => {
+      orderId = getOrderId();
+      body = new CreateOrderDto();
+      body.id = orderId;
+      body.order_line = mockOrderLineIds;
+      body.state = 'draft';
 
-    await request(app.getHttpServer())
-      .post('/odoo/create')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+    });
 
-    const hash = await spyExecute.mock.results[0].value;
-    const operations = await extractOperations(serverSpy);
+    it('Should create an order and trace the transaction', async () => {
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
 
-    expect(spyExecute).toBeCalledTimes(1);
-    expect(spyExecute).toBeCalledWith(
-      TRANSACTION_TYPE.CREATE,
-      body.id,
-      body.order_line,
-    );
-    expect(
-      hasPaymentOperation(
-        operations,
-        amounts,
-        issuerKeypair.publicKey(),
-        createPublicKey,
-      ),
-    ).toBe(true);
+      await request(app.getHttpServer())
+        .post('/odoo/create')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    const { body: trace } = await request(app.getHttpServer())
-      .get(`/stellar/trace/${orderId}`)
-      .expect(HttpStatus.OK);
+      const hash = await executeSpy.mock.results[0].value;
+      const operations = await extractOperations(serverSpy);
 
-    expect(trace.length).toBe(1);
-    expect(trace[0].orderId).toBe(orderId);
-    expect(trace[0].hash).toBe(hash);
-    expect(trace[0].type).toBe(TRANSACTION_TYPE.CREATE);
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CREATE,
+        body.id,
+        body.order_line,
+      );
+      expect(
+        hasPaymentOperation(
+          operations,
+          amounts,
+          issuerKeypair.publicKey(),
+          createPublicKey,
+        ),
+      ).toBe(true);
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(trace.length).toBe(1);
+      expect(trace[0].orderId).toBe(orderId);
+      expect(trace[0].hash).toBe(hash);
+      expect(trace[0].type).toBe(TRANSACTION_TYPE.CREATE);
+    });
+
+    it('Should persist a failed transaction when a create transaction fails', async () => {
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error('error'));
+
+      await request(app.getHttpServer())
+        .post('/odoo/create')
+        .send(body)
+        .expect(HttpStatus.CREATED);
+
+      const hash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CREATE,
+        body.id,
+        body.order_line,
+      );
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(hash).toBe(undefined);
+      expect(trace.length).toBe(1);
+      expect(trace[0].orderId).toBe(orderId);
+      expect(trace[0].hash).toBe('');
+      expect(trace[0].type).toBe(TRANSACTION_TYPE.CREATE);
+    });
   });
 
-  it('POST /odoo/confirm - Should confirm an order and trace the transaction', async () => {
-    const orderId = createdOrderId;
-    const body = new ConfirmOrderDto();
-    body.id = orderId;
-    body.order_line = mockOrderLineIds;
-    body.state = 'sale';
+  describe('POST /odoo/confirm', () => {
+    beforeEach(() => {
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+    });
 
-    const spyExecute = jest.spyOn(stellarService, 'executeTransaction');
-    const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
-    jest
-      .spyOn(mockOdooService, 'getProductsForOrderLines')
-      .mockResolvedValue(mockOrderLines);
+    it('Should confirm an order and trace the transaction', async () => {
+      const orderId = createdOrderId;
+      const body = new ConfirmOrderDto();
+      body.id = orderId;
+      body.order_line = mockOrderLineIds;
+      body.state = 'sale';
 
-    await request(app.getHttpServer())
-      .post('/odoo/confirm')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
 
-    const hash = await spyExecute.mock.results[0].value;
-    const operations = await extractOperations(serverSpy);
+      await request(app.getHttpServer())
+        .post('/odoo/confirm')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyExecute).toBeCalledTimes(1);
-    expect(spyExecute).toBeCalledWith(
-      TRANSACTION_TYPE.CONFIRM,
-      body.id,
-      body.order_line,
-    );
-    expect(
-      hasPaymentOperation(
-        operations,
-        amounts,
-        createPublicKey,
-        confirmPublicKey,
-      ),
-    ).toBe(true);
+      const hash = await executeSpy.mock.results[0].value;
+      const operations = await extractOperations(serverSpy);
 
-    const { body: trace } = await request(app.getHttpServer())
-      .get(`/stellar/trace/${orderId}`)
-      .expect(HttpStatus.OK);
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CONFIRM,
+        body.id,
+        body.order_line,
+      );
+      expect(
+        hasPaymentOperation(
+          operations,
+          amounts,
+          createPublicKey,
+          confirmPublicKey,
+        ),
+      ).toBe(true);
 
-    expect(trace.length).toBe(2);
-    expect(trace[1].orderId).toBe(orderId);
-    expect(trace[1].hash).toBe(hash);
-    expect(trace[1].type).toBe(TRANSACTION_TYPE.CONFIRM);
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(trace.length).toBe(2);
+      expect(trace[1].orderId).toBe(orderId);
+      expect(trace[1].hash).toBe(hash);
+      expect(trace[1].type).toBe(TRANSACTION_TYPE.CONFIRM);
+    });
+
+    it('Should persist a failed transaction when a confirm transaction fails', async () => {
+      const orderId = createdOrderToFailId;
+      const body = new ConfirmOrderDto();
+      body.id = orderId;
+      body.order_line = mockOrderLineIds;
+      body.state = 'sale';
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error('error'));
+
+      await request(app.getHttpServer())
+        .post('/odoo/confirm')
+        .send(body)
+        .expect(HttpStatus.CREATED);
+
+      const hash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CONFIRM,
+        body.id,
+        body.order_line,
+      );
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(hash).toBe(undefined);
+      expect(trace.length).toBe(2);
+      expect(trace[1].orderId).toBe(orderId);
+      expect(trace[1].hash).toBe('');
+      expect(trace[1].type).toBe(TRANSACTION_TYPE.CONFIRM);
+    });
   });
 
-  it('POST /odoo/consolidate - Should consolidate an order', async () => {
-    const orderId = confirmedOrderId;
-    const body = new ConsolidateOrderDto();
-    body.sale_id = orderId;
-    body.state = 'assigned';
+  describe('POST /odoo/consolidate', () => {
+    beforeEach(() => {
+      jest
+        .spyOn(mockOdooService, 'getOrderLinesForOrder')
+        .mockResolvedValueOnce(mockOrderLineIds);
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+    });
 
-    const spyExecute = jest.spyOn(stellarService, 'executeTransaction');
-    const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
-    jest
-      .spyOn(mockOdooService, 'getOrderLinesForOrder')
-      .mockResolvedValueOnce(mockOrderLineIds);
-    jest
-      .spyOn(mockOdooService, 'getProductsForOrderLines')
-      .mockResolvedValue(mockOrderLines);
+    it('Should consolidate an order and trace the transaction', async () => {
+      const orderId = confirmedOrderId;
+      const body = new ConsolidateOrderDto();
+      body.sale_id = orderId;
+      body.state = 'assigned';
 
-    await request(app.getHttpServer())
-      .post('/odoo/consolidate')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
 
-    const hash = await spyExecute.mock.results[0].value;
-    const operations = await extractOperations(serverSpy);
+      await request(app.getHttpServer())
+        .post('/odoo/consolidate')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyExecute).toBeCalledTimes(1);
-    expect(spyExecute).toBeCalledWith(
-      TRANSACTION_TYPE.CONSOLIDATE,
-      body.sale_id,
-      undefined,
-    );
-    expect(
-      hasPaymentOperation(
-        operations,
-        amounts,
-        confirmPublicKey,
-        consolidatePublicKey,
-      ),
-    ).toBe(true);
+      const hash = await executeSpy.mock.results[0].value;
+      const operations = await extractOperations(serverSpy);
 
-    const { body: trace } = await request(app.getHttpServer())
-      .get(`/stellar/trace/${orderId}`)
-      .expect(HttpStatus.OK);
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CONSOLIDATE,
+        body.sale_id,
+        undefined,
+      );
+      expect(
+        hasPaymentOperation(
+          operations,
+          amounts,
+          confirmPublicKey,
+          consolidatePublicKey,
+        ),
+      ).toBe(true);
 
-    expect(trace.length).toBe(3);
-    expect(trace[2].orderId).toBe(orderId);
-    expect(trace[2].hash).toBe(hash);
-    expect(trace[2].type).toBe(TRANSACTION_TYPE.CONSOLIDATE);
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(trace.length).toBe(3);
+      expect(trace[2].orderId).toBe(orderId);
+      expect(trace[2].hash).toBe(hash);
+      expect(trace[2].type).toBe(TRANSACTION_TYPE.CONSOLIDATE);
+    });
+
+    it('Should persist a failed transaction when a consolidate transaction fails', async () => {
+      const orderId = confirmedOrderToFailId;
+      const body = new ConsolidateOrderDto();
+      body.sale_id = orderId;
+      body.state = 'assigned';
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error('error'));
+
+      await request(app.getHttpServer())
+        .post('/odoo/consolidate')
+        .send(body)
+        .expect(HttpStatus.CREATED);
+
+      const hash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CONSOLIDATE,
+        body.sale_id,
+        undefined,
+      );
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(hash).toBe(undefined);
+      expect(trace.length).toBe(3);
+      expect(trace[2].orderId).toBe(orderId);
+      expect(trace[2].hash).toBe('');
+      expect(trace[2].type).toBe(TRANSACTION_TYPE.CONSOLIDATE);
+    });
   });
 
-  it('POST /odoo/deliver - Should deliver an order', async () => {
-    const orderId = consolidatedOrderId;
-    const body = new DeliverOrderDto();
-    body.sale_id = orderId;
-    body.state = 'done';
+  describe('POST /odoo/deliver', () => {
+    beforeEach(() => {
+      jest
+        .spyOn(mockOdooService, 'getOrderLinesForOrder')
+        .mockResolvedValueOnce(mockOrderLineIds);
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+    });
 
-    const spyExecute = jest.spyOn(stellarService, 'executeTransaction');
-    const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
-    jest
-      .spyOn(mockOdooService, 'getOrderLinesForOrder')
-      .mockResolvedValueOnce(mockOrderLineIds);
-    jest
-      .spyOn(mockOdooService, 'getProductsForOrderLines')
-      .mockResolvedValue(mockOrderLines);
+    it('Should deliver an order and trace the transaction', async () => {
+      const orderId = consolidatedOrderId;
+      const body = new DeliverOrderDto();
+      body.sale_id = orderId;
+      body.state = 'done';
 
-    await request(app.getHttpServer())
-      .post('/odoo/deliver')
-      .send(body)
-      .expect(HttpStatus.CREATED);
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
 
-    const hash = await spyExecute.mock.results[0].value;
-    const operations = await extractOperations(serverSpy);
+      await request(app.getHttpServer())
+        .post('/odoo/deliver')
+        .send(body)
+        .expect(HttpStatus.CREATED);
 
-    expect(spyExecute).toBeCalledTimes(1);
-    expect(spyExecute).toBeCalledWith(
-      TRANSACTION_TYPE.DELIVER,
-      body.sale_id,
-      undefined,
-    );
-    expect(
-      hasPaymentOperation(
-        operations,
-        amounts,
-        consolidatePublicKey,
-        deliverPublicKey,
-      ),
-    ).toBe(true);
+      const hash = await executeSpy.mock.results[0].value;
+      const operations = await extractOperations(serverSpy);
 
-    const { body: trace } = await request(app.getHttpServer())
-      .get(`/stellar/trace/${orderId}`)
-      .expect(HttpStatus.OK);
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.DELIVER,
+        body.sale_id,
+        undefined,
+      );
+      expect(
+        hasPaymentOperation(
+          operations,
+          amounts,
+          consolidatePublicKey,
+          deliverPublicKey,
+        ),
+      ).toBe(true);
 
-    expect(trace.length).toBe(4);
-    expect(trace[3].orderId).toBe(orderId);
-    expect(trace[3].hash).toBe(hash);
-    expect(trace[3].type).toBe(TRANSACTION_TYPE.DELIVER);
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(trace.length).toBe(4);
+      expect(trace[3].orderId).toBe(orderId);
+      expect(trace[3].hash).toBe(hash);
+      expect(trace[3].type).toBe(TRANSACTION_TYPE.DELIVER);
+    });
+
+    it('Should persist a failed transaction when a deliver transaction fails', async () => {
+      const orderId = consolidatedOrderToFailId;
+      const body = new DeliverOrderDto();
+      body.sale_id = orderId;
+      body.state = 'done';
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      jest
+        .spyOn(stellarConfig.server, 'submitTransaction')
+        .mockRejectedValueOnce(new Error('error'));
+
+      await request(app.getHttpServer())
+        .post('/odoo/deliver')
+        .send(body)
+        .expect(HttpStatus.CREATED);
+
+      const hash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.DELIVER,
+        body.sale_id,
+        undefined,
+      );
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(hash).toBe(undefined);
+      expect(trace.length).toBe(4);
+      expect(trace[3].orderId).toBe(orderId);
+      expect(trace[3].hash).toBe('');
+      expect(trace[3].type).toBe(TRANSACTION_TYPE.DELIVER);
+    });
+  });
+
+  describe('Invalid transactions', () => {
+    it('Should not make a transaction if the transaction is not the valid next one', async () => {
+      const orderId = getOrderId();
+
+      await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .then(({ status, body: trace }) => {
+          expect(status).toBe(HttpStatus.OK);
+          expect(trace.length).toBe(0);
+        });
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+
+      const confirmDto = new ConfirmOrderDto();
+      confirmDto.id = orderId;
+      confirmDto.order_line = mockOrderLineIds;
+      confirmDto.state = 'sale';
+
+      await request(app.getHttpServer())
+        .post('/odoo/confirm')
+        .send(confirmDto)
+        .expect(HttpStatus.CREATED);
+
+      const confirmHash = await executeSpy.mock.results[0].value;
+
+      const consolidateDto = new ConsolidateOrderDto();
+      consolidateDto.sale_id = orderId;
+      consolidateDto.state = 'assigned';
+
+      await request(app.getHttpServer())
+        .post('/odoo/consolidate')
+        .send(consolidateDto)
+        .expect(HttpStatus.CREATED);
+
+      const consolidateHash = await executeSpy.mock.results[1].value;
+
+      const deliverDto = new DeliverOrderDto();
+      deliverDto.sale_id = orderId;
+      deliverDto.state = 'done';
+
+      await request(app.getHttpServer())
+        .post('/odoo/deliver')
+        .send(deliverDto)
+        .expect(HttpStatus.CREATED);
+
+      const deliverHash = await executeSpy.mock.results[2].value;
+
+      expect(executeSpy).toBeCalledTimes(3);
+      expect(serverSpy).not.toBeCalled();
+      expect(confirmHash).toBe(undefined);
+      expect(consolidateHash).toBe(undefined);
+      expect(deliverHash).toBe(undefined);
+
+      await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .then(({ status, body: trace }) => {
+          expect(status).toBe(HttpStatus.OK);
+          expect(trace.length).toBe(0);
+        });
+    });
+
+    it('Should not make a transaction if the last one failed previously', async () => {
+      const orderId = failedOrderId;
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+
+      const confirmDto = new ConfirmOrderDto();
+      confirmDto.id = orderId;
+      confirmDto.order_line = mockOrderLineIds;
+      confirmDto.state = 'sale';
+
+      await request(app.getHttpServer())
+        .post('/odoo/confirm')
+        .send(confirmDto)
+        .expect(HttpStatus.CREATED);
+
+      const confirmHash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(serverSpy).not.toBeCalled();
+      expect(confirmHash).toBe(undefined);
+    });
   });
 });
