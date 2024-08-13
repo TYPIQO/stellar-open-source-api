@@ -9,6 +9,7 @@ import { datasourceOptions } from '@configuration/orm.configuration';
 
 import { CommonModule } from '@common/common.module';
 
+import { AutomationModule } from './modules/automation/automation.module';
 import { OdooModule } from './modules/odoo/odoo.module';
 import { StellarModule } from './modules/stellar/stellar.module';
 
@@ -31,6 +32,7 @@ import { StellarModule } from './modules/stellar/stellar.module';
     CommonModule,
     OdooModule,
     StellarModule,
+    AutomationModule,
   ],
   controllers: [],
   providers: [],
