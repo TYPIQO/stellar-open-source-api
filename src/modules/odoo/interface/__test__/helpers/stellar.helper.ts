@@ -42,6 +42,10 @@ export async function createMuxedAccounts(
       sourceAccount,
       TRACEABILITY_NODES.DELIVER,
     ).accountId(),
+    [TRACEABILITY_NODES.CANCEL]: new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.CANCEL,
+    ).accountId(),
   };
 }
 
@@ -133,8 +137,9 @@ export async function extractOperations(
   serverSpy: jest.SpyInstance<
     Promise<Horizon.HorizonApi.SubmitTransactionResponse>
   >,
+  resultIndex = 0,
 ): Promise<Operation[]> {
-  const { envelope_xdr } = (await serverSpy.mock.results[0]
+  const { envelope_xdr } = (await serverSpy.mock.results[resultIndex]
     .value) as Horizon.HorizonApi.SubmitTransactionResponse;
   const { operations } = new Transaction(
     envelope_xdr,

@@ -13,6 +13,7 @@ import { StellarConfig } from '@/configuration/stellar.configuration';
 import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
+import { CancelOrderDto } from '../../application/dto/cancel-order.dto';
 import { ConfirmOrderDto } from '../../application/dto/confirm-order.dto';
 import { ConsolidateOrderDto } from '../../application/dto/consolidate-order.dto';
 import { CreateOrderDto } from '../../application/dto/create-order.dto';
@@ -51,6 +52,8 @@ const failedOrderId = 4444;
 const createdOrderToFailId = 5555;
 const confirmedOrderToFailId = 6666;
 const consolidatedOrderToFailId = 7777;
+const failedOrderToCancelId = 8888;
+const canceledOrderId = 9999;
 
 describe('Odoo Module', () => {
   let app: INestApplication;
@@ -62,6 +65,7 @@ describe('Odoo Module', () => {
   let confirmPublicKey: string;
   let consolidatePublicKey: string;
   let deliverPublicKey: string;
+  let cancelPublicKey: string;
 
   let serverSpy: jest.SpyInstance;
 
@@ -74,6 +78,7 @@ describe('Odoo Module', () => {
     confirmPublicKey = nodes[TRACEABILITY_NODES.CONFIRM];
     consolidatePublicKey = nodes[TRACEABILITY_NODES.CONSOLIDATE];
     deliverPublicKey = nodes[TRACEABILITY_NODES.DELIVER];
+    cancelPublicKey = nodes[TRACEABILITY_NODES.CANCEL];
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -171,7 +176,7 @@ describe('Odoo Module', () => {
 
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
-        .mockResolvedValue(mockOrderLines);
+        .mockResolvedValueOnce(mockOrderLines);
     });
 
     it('Should create an order and trace the transaction', async () => {
@@ -247,7 +252,7 @@ describe('Odoo Module', () => {
     beforeEach(() => {
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
-        .mockResolvedValue(mockOrderLines);
+        .mockResolvedValueOnce(mockOrderLines);
     });
 
     it('Should confirm an order and trace the transaction', async () => {
@@ -338,7 +343,7 @@ describe('Odoo Module', () => {
         .mockResolvedValueOnce(mockOrderLineIds);
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
-        .mockResolvedValue(mockOrderLines);
+        .mockResolvedValueOnce(mockOrderLines);
     });
 
     it('Should consolidate an order and trace the transaction', async () => {
@@ -427,7 +432,7 @@ describe('Odoo Module', () => {
         .mockResolvedValueOnce(mockOrderLineIds);
       jest
         .spyOn(mockOdooService, 'getProductsForOrderLines')
-        .mockResolvedValue(mockOrderLines);
+        .mockResolvedValueOnce(mockOrderLines);
     });
 
     it('Should deliver an order and trace the transaction', async () => {
@@ -506,6 +511,70 @@ describe('Odoo Module', () => {
       expect(trace[3].orderId).toBe(orderId);
       expect(trace[3].hash).toBe('');
       expect(trace[3].type).toBe(TRANSACTION_TYPE.DELIVER);
+    });
+  });
+
+  describe('POST /odoo/cancel', () => {
+    it('Should cancel an order and trace the transaction', async () => {
+      const orderId = getOrderId();
+      const createDto = new CreateOrderDto();
+      createDto.id = orderId;
+      createDto.order_line = mockOrderLineIds;
+      createDto.state = 'draft';
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+      jest
+        .spyOn(mockOdooService, 'getProductsForOrderLines')
+        .mockResolvedValue(mockOrderLines);
+
+      await request(app.getHttpServer())
+        .post('/odoo/create')
+        .send(createDto)
+        .expect(HttpStatus.CREATED);
+
+      const createHash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+
+      const cancelDto = new CancelOrderDto();
+      cancelDto.id = orderId;
+      cancelDto.state = 'cancel';
+
+      await request(app.getHttpServer())
+        .post('/odoo/cancel')
+        .send(cancelDto)
+        .expect(HttpStatus.CREATED);
+
+      const cancelHash = await executeSpy.mock.results[1].value;
+      const operations = await extractOperations(serverSpy, 1);
+
+      expect(executeSpy).toBeCalledTimes(2);
+      expect(executeSpy).toBeCalledWith(
+        TRANSACTION_TYPE.CANCEL,
+        orderId,
+        undefined,
+      );
+      expect(
+        hasPaymentOperation(
+          operations,
+          amounts,
+          createPublicKey,
+          cancelPublicKey,
+        ),
+      ).toBe(true);
+
+      const { body: trace } = await request(app.getHttpServer())
+        .get(`/stellar/trace/${orderId}`)
+        .expect(HttpStatus.OK);
+
+      expect(trace.length).toBe(2);
+      expect(trace[0].orderId).toBe(orderId);
+      expect(trace[0].hash).toBe(createHash);
+      expect(trace[0].type).toBe(TRANSACTION_TYPE.CREATE);
+      expect(trace[1].orderId).toBe(orderId);
+      expect(trace[1].hash).toBe(cancelHash);
+      expect(trace[1].type).toBe(TRANSACTION_TYPE.CANCEL);
     });
   });
 
@@ -592,6 +661,72 @@ describe('Odoo Module', () => {
       expect(executeSpy).toBeCalledTimes(1);
       expect(serverSpy).not.toBeCalled();
       expect(confirmHash).toBe(undefined);
+    });
+
+    it('Should not make a cancel transaction if there is no previous one', async () => {
+      const orderId = getOrderId();
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+
+      const cancelDto = new CancelOrderDto();
+      cancelDto.id = orderId;
+      cancelDto.state = 'cancel';
+
+      await request(app.getHttpServer())
+        .post('/odoo/cancel')
+        .send(cancelDto)
+        .expect(HttpStatus.CREATED);
+
+      const cancelHash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(serverSpy).not.toBeCalled();
+      expect(cancelHash).toBe(undefined);
+    });
+
+    it('Should not make a cancel transaction if the last one failed previously', async () => {
+      const orderId = failedOrderToCancelId;
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+
+      const cancelDto = new CancelOrderDto();
+      cancelDto.id = orderId;
+      cancelDto.state = 'cancel';
+
+      await request(app.getHttpServer())
+        .post('/odoo/cancel')
+        .send(cancelDto)
+        .expect(HttpStatus.CREATED);
+
+      const cancelHash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(serverSpy).not.toBeCalled();
+      expect(cancelHash).toBe(undefined);
+    });
+
+    it('Should not make a cancel transaction if there is the last one is a cancel', async () => {
+      const orderId = canceledOrderId;
+
+      const executeSpy = jest.spyOn(stellarService, 'executeTransaction');
+      const serverSpy = jest.spyOn(stellarConfig.server, 'submitTransaction');
+
+      const cancelDto = new CancelOrderDto();
+      cancelDto.id = orderId;
+      cancelDto.state = 'cancel';
+
+      await request(app.getHttpServer())
+        .post('/odoo/cancel')
+        .send(cancelDto)
+        .expect(HttpStatus.CREATED);
+
+      const cancelHash = await executeSpy.mock.results[0].value;
+
+      expect(executeSpy).toBeCalledTimes(1);
+      expect(serverSpy).not.toBeCalled();
+      expect(cancelHash).toBe(undefined);
     });
   });
 });
