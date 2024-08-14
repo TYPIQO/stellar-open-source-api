@@ -7,16 +7,20 @@ import { StellarService } from '@/modules/stellar/application/services/stellar.s
 
 import { IOrderLineResponse } from '../../responses/order-line.response.interface';
 import { ISaleOrderResponse } from '../../responses/sale-order.response.interface';
+import { MODEL } from '../odoo.models';
 import { OdooService } from '../odoo.service';
+import { STATE } from '../odoo.state';
 
 const mockConnect = jest.fn();
 const mockSearchRead = jest.fn();
+const mockCreate = jest.fn();
 jest.mock(
   'odoo-await',
   () =>
     class MockOdoo {
       connect = mockConnect;
       searchRead = mockSearchRead;
+      create = mockCreate;
     },
 );
 
@@ -106,6 +110,44 @@ describe('Odoo Service', () => {
           quantity: 20,
         },
       ]);
+    });
+  });
+
+  describe('Odoo Service - Create automation', () => {
+    it('Should create automation', async () => {
+      mockSearchRead
+        .mockImplementationOnce(() => {
+          return [{ id: 1, name: 'sale.order', model: MODEL.SALE_ORDER }];
+        })
+        .mockImplementationOnce(() => {
+          return [
+            {
+              id: 1,
+              name: 'state',
+              model: MODEL.SALE_ORDER,
+              selection: "'(draft,Draft)', '(sale,Sale)'",
+              selection_ids: [1, 2],
+            },
+          ];
+        });
+      mockCreate
+        .mockImplementationOnce(() => {
+          return 1;
+        })
+        .mockImplementationOnce(() => {
+          return 2;
+        });
+
+      const automation = await odooService.createAutomation({
+        automationName: 'Automation 1',
+        serverActionName: 'Server Action 1',
+        endpoint: 'https://example.com',
+        fieldNames: ['field 1', 'field 2'],
+        model: MODEL.SALE_ORDER,
+        state: STATE.DRAFT,
+      });
+
+      expect(automation).toEqual(2);
     });
   });
 });

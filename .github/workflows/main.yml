@@ -10,6 +10,7 @@ jobs:
   run-tests:
     env:
       PORT: 3000
+      SERVER_URL: http://localhost:3000
       DB_HOST: localhost
       DB_PORT: 3306
       DB_USERNAME: test
@@ -18,7 +19,7 @@ jobs:
       SONAR_SERVER_URL: test
       SONAR_TOKEN: test
       STELLAR_NETWORK: testnet
-      STELLAR_ISSUER_SECRET_KEY: FAKE_SECRET_KEY
+      STELLAR_ISSUER_SECRET_KEY: ${{ secrets.STELLAR_ISSUER_SECRET_KEY }}
       ODOO_URL: FAKE_URL
       ODOO_DATABASE: FAKE_DATABASE
       ODOO_USERNAME: FAKE_USERNAME
