@@ -10,6 +10,7 @@ jobs:
   run-tests:
     env:
       PORT: 3000
+      SERVER_ENV_URL: http://localhost:3000
       DB_HOST: localhost
       DB_PORT: 3306
       DB_USERNAME: test
