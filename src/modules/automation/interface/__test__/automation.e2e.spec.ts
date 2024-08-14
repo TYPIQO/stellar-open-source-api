@@ -4,11 +4,16 @@ import * as request from 'supertest';
 
 import { AppModule } from '@/app.module';
 import { OdooService } from '@/modules/odoo/application/services/odoo.service';
+import { StellarService } from '@/modules/stellar/application/services/stellar.service';
 import { TRANSACTION_TYPE } from '@/modules/stellar/domain/stellar-transaction.domain';
 
 const mockOdooService = {
   onModuleInit: jest.fn(),
   createAutomation: jest.fn(),
+};
+
+const mockStellarService = {
+  onModuleInit: jest.fn(),
 };
 
 describe('Automation module', () => {
@@ -20,6 +25,8 @@ describe('Automation module', () => {
     })
       .overrideProvider(OdooService)
       .useValue(mockOdooService)
+      .overrideProvider(StellarService)
+      .useValue(mockStellarService)
       .compile();
 
     app = moduleRef.createNestApplication();
