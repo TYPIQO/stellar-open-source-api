@@ -7,7 +7,7 @@ import { Automation } from '../domain/automation.domain';
 export class AutomationController {
   constructor(private readonly automationService: AutomationService) {}
 
-  @Post('createAll')
+  @Post('batch')
   async createAllAutomations(): Promise<Automation[]> {
     return await this.automationService.createAllAutomations();
   }

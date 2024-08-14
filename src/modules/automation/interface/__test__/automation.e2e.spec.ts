@@ -37,7 +37,7 @@ describe('Automation module', () => {
     await app.close();
   });
 
-  describe('POST /automation/createAll', () => {
+  describe('POST /automation/batch', () => {
     it('Should create all automations', async () => {
       jest
         .spyOn(mockOdooService, 'createAutomation')
@@ -48,7 +48,7 @@ describe('Automation module', () => {
         .mockResolvedValueOnce(5);
 
       const { status, body } = await request(app.getHttpServer())
-        .post('/automation/createAll')
+        .post('/automation/batch')
         .send();
 
       expect(status).toEqual(201);
