@@ -61,7 +61,7 @@ export class AutomationService {
       case TRANSACTION_TYPE.CANCEL:
         dto.serverActionName = 'CANCEL-ORDER-ACTION';
         dto.automationName = 'CANCEL-ORDER-AUTOMATION';
-        dto.endpoint = `${process.env.SERVER_URL}/api/warehouse/order`;
+        dto.endpoint = `${process.env.SERVER_URL}/api/odoo/order`;
         dto.state = STATE.CANCEL;
         dto.model = MODEL.SALE_ORDER;
         dto.fieldNames = ['id', 'state'];
