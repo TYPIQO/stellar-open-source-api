@@ -16,8 +16,4 @@ export class AutomationTypeormRepository implements IAutomationRepository {
   async create(automation: Automation): Promise<Automation> {
     return await this.repository.save(automation);
   }
-
-  async getAll(): Promise<Automation[]> {
-    return await this.repository.find();
-  }
 }
