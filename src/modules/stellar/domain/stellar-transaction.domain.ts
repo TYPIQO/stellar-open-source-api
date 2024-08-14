@@ -5,6 +5,7 @@ export enum TRANSACTION_TYPE {
   CONFIRM = 'confirm',
   CONSOLIDATE = 'consolidate',
   DELIVER = 'deliver',
+  CANCEL = 'cancel',
 }
 
 export class StellarTransaction extends Base {

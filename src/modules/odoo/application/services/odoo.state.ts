@@ -3,4 +3,5 @@ export enum STATE {
   SALE = 'sale',
   ASSIGNED = 'assigned',
   DONE = 'done',
+  CANCEL = 'cancel',
 }

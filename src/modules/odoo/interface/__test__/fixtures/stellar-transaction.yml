@@ -65,3 +65,18 @@ items:
     orderId: 7777
     type: 'consolidate'
     timestamp: '2021-01-01T00:00:00Z'
+  stellarTransaction13:
+    hash: ''
+    orderId: 8888
+    type: 'create'
+    timestamp: '2021-01-01T00:00:00Z'
+  stellarTransaction14:
+    hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
+    orderId: 9999
+    type: 'create'
+    timestamp: '2021-01-01T00:00:00Z'
+  stellarTransaction15:
+    hash: 'b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020'
+    orderId: 9999
+    type: 'cancel'
+    timestamp: '2021-01-01T00:00:00Z'

@@ -17,6 +17,7 @@
     "test": "cross-env NODE_ENV=automated_tests jest",
     "posttest": "rimraf -rf ./data/tests.*.*.db",
     "test:watch": "cross-env NODE_ENV=automated_tests jest --watch",
+    "posttest:cov": "rimraf -rf ./data/tests.*.*.db",
     "test:cov": "cross-env NODE_ENV=automated_tests jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli -d ./src/configuration/orm.configuration.ts",

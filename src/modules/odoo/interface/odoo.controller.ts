@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 
+import { CancelOrderDto } from '@/modules/odoo/application/dto/cancel-order.dto';
 import { ConfirmOrderDto } from '@/modules/odoo/application/dto/confirm-order.dto';
 import { ConsolidateOrderDto } from '@/modules/odoo/application/dto/consolidate-order.dto';
 import { CreateOrderDto } from '@/modules/odoo/application/dto/create-order.dto';
@@ -40,5 +41,10 @@ export class OdooController {
   @Post('deliver')
   deliver(@Body() body: DeliverOrderDto): void {
     this.stellarService.pushTransaction(TRANSACTION_TYPE.DELIVER, body.sale_id);
+  }
+
+  @Post('cancel')
+  cancel(@Body() body: CancelOrderDto): void {
+    this.stellarService.pushTransaction(TRANSACTION_TYPE.CANCEL, body.id);
   }
 }

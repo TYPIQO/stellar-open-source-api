@@ -69,10 +69,33 @@ export class StellarService implements OnModuleInit {
     return amounts;
   }
 
+  private validateCancelTransaction(
+    transactions: StellarTransaction[],
+  ): boolean {
+    if (transactions.length === 0) {
+      return false;
+    }
+
+    const prevTransaction = transactions[transactions.length - 1];
+
+    if (
+      !prevTransaction.hash ||
+      prevTransaction.type === TRANSACTION_TYPE.CANCEL
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
   private validateTransaction(
     type: TRANSACTION_TYPE,
     transactions: StellarTransaction[],
   ): boolean {
+    if (type === TRANSACTION_TYPE.CANCEL) {
+      return this.validateCancelTransaction(transactions);
+    }
+
     const validationMap = {
       [TRANSACTION_TYPE.CREATE]: {
         length: 0,
@@ -126,31 +149,38 @@ export class StellarService implements OnModuleInit {
       return;
     }
 
-    if (!orderLines) {
-      orderLines = await this.odooService.getOrderLinesForOrder(orderId);
-    }
-
-    const products = await this.odooService.getProductsForOrderLines(
-      orderLines,
-    );
+    let transaction: ISubmittedTransaction;
 
     try {
-      const amounts = this.transformOrderLinesToAssetAmounts(products);
+      if (type === TRANSACTION_TYPE.CANCEL) {
+        transaction = await this.stellarRepository.cancelOrder(
+          transactions[transactions.length - 1].hash,
+        );
+      } else {
+        if (!orderLines) {
+          orderLines = await this.odooService.getOrderLinesForOrder(orderId);
+        }
+        const products = await this.odooService.getProductsForOrderLines(
+          orderLines,
+        );
+        const amounts = this.transformOrderLinesToAssetAmounts(products);
 
-      let transaction: ISubmittedTransaction;
-      switch (type) {
-        case TRANSACTION_TYPE.CREATE:
-          transaction = await this.stellarRepository.createOrder(amounts);
-          break;
-        case TRANSACTION_TYPE.CONFIRM:
-          transaction = await this.stellarRepository.confirmOrder(amounts);
-          break;
-        case TRANSACTION_TYPE.CONSOLIDATE:
-          transaction = await this.stellarRepository.consolidateOrder(amounts);
-          break;
-        case TRANSACTION_TYPE.DELIVER:
-          transaction = await this.stellarRepository.deliverOrder(amounts);
-          break;
+        switch (type) {
+          case TRANSACTION_TYPE.CREATE:
+            transaction = await this.stellarRepository.createOrder(amounts);
+            break;
+          case TRANSACTION_TYPE.CONFIRM:
+            transaction = await this.stellarRepository.confirmOrder(amounts);
+            break;
+          case TRANSACTION_TYPE.CONSOLIDATE:
+            transaction = await this.stellarRepository.consolidateOrder(
+              amounts,
+            );
+            break;
+          case TRANSACTION_TYPE.DELIVER:
+            transaction = await this.stellarRepository.deliverOrder(amounts);
+            break;
+        }
       }
 
       await this.stellarTransactionRepository.create({

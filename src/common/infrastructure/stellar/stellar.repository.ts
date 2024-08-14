@@ -25,6 +25,12 @@ import {
 } from '../../application/repository/stellar.repository.interface';
 import { TRACEABILITY_NODES } from './nodes.enum';
 
+type MuxedAccountPayment = {
+  to_muxed: string;
+  asset_code: string;
+  amount: string;
+};
+
 @Injectable()
 export class StellarRepository implements IStellarRepository {
   private readonly TRANSACTION_TIMEOUT = 30;
@@ -38,6 +44,7 @@ export class StellarRepository implements IStellarRepository {
   private confirmNode: MuxedAccount;
   private consolidateNode: MuxedAccount;
   private deliverNode: MuxedAccount;
+  private cancelNode: MuxedAccount;
 
   constructor(private readonly stellarConfig: StellarConfig) {
     this.server = this.stellarConfig.server;
@@ -102,6 +109,10 @@ export class StellarRepository implements IStellarRepository {
     this.deliverNode = new MuxedAccount(
       sourceAccount,
       TRACEABILITY_NODES.DELIVER,
+    );
+    this.cancelNode = new MuxedAccount(
+      sourceAccount,
+      TRACEABILITY_NODES.CANCEL,
     );
   }
 
@@ -200,6 +211,29 @@ export class StellarRepository implements IStellarRepository {
       );
     } catch {
       throw new StellarError(ERROR_CODES.DELIVER_ORDER_ERROR);
+    }
+  }
+
+  async cancelOrder(hash: string): Promise<ISubmittedTransaction> {
+    try {
+      const payments = (
+        await this.server.payments().limit(100).forTransaction(hash).call()
+      ).records as unknown as MuxedAccountPayment[];
+
+      const amounts: IAssetAmount[] = payments.map(({ asset_code, amount }) => {
+        return {
+          assetCode: asset_code,
+          quantity: amount,
+        };
+      });
+
+      return await this.doPayment(
+        payments[0].to_muxed,
+        this.cancelNode.accountId(),
+        amounts,
+      );
+    } catch {
+      throw new StellarError(ERROR_CODES.CANCEL_ORDER_ERROR);
     }
   }
 }
