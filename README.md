@@ -13,6 +13,7 @@ This repository integrates the Stellar blockchain with [Odoo](https://www.odoo.c
   - [Stellar Configuration](#stellar-configuration)
   - [Server Configuration](#server-configuration)
 - [Usage](#usage)
+- [Webhooks](#webhooks)
 - [Contributing](#contributing)
 
 ## Getting Started
@@ -114,6 +115,7 @@ This is required for Odoo Webhook configuration.
 
 2. **Creating Odoo Automations**:
    Call the endpoint /automation/batch to create Odoo automations. Ensure the SERVER_URL variable is defined before doing this.
+   Each automation will trigger a specific webhook. You can check them in the [webhook section](#webhooks).
 
 ```
 POST /api/automation/batch
@@ -146,6 +148,16 @@ Example API response:
 ```
 
 The available movement types are: "create", "confirm", "consolidate", "deliver", "cancel". For transactions that fail due to Stellar server issues, the transaction hash will be empty.
+
+## Webhooks
+
+Each order movement in Odoo will trigger a webhook. This is the list of the available ones:
+
+- ORDER CREATION - `POST /api/odoo/create`
+- ORDER CONFIRMATION - `POST /api/odoo/confirm`
+- ORDER CONSOLIDATION - `POST /api/odoo/consolidate`
+- ORDER DELIVERY - `POST /api/odoo/deliver`
+- ORDER CANCEL - `POST /api/odoo/cancel`
 
 ## Contributing
 
